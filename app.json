@@ -21,8 +21,8 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "CAMERA", 
-        "READ_EXTERNAL_STORAGE", 
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
         "INTERNET"
       ]
@@ -49,6 +49,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "130b662c-af1e-4a8e-84cf-642b13f3df69"
+      }
+    },
+    "owner": "vad-mining-space"
   }
 }
