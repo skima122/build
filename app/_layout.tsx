@@ -60,7 +60,7 @@ export default function RootLayout() {
       >
         {isAuthenticated ? (
           profileCompleted ? (
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           ) : (
             <Stack.Screen
               name="auth/profileSetup"

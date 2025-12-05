@@ -83,7 +83,7 @@ export default function ProfileSetup() {
       });
 
       Alert.alert("Success", "Profile saved!");
-      router.replace("/");
+      // router.replace("/");
     } catch (error: any) {
       Alert.alert("Error", error.message);
     }

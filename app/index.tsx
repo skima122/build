@@ -1,5 +1,4 @@
-import { Redirect } from "expo-router";
-
+// app/index.tsx
 export default function Index() {
-  return <Redirect href="/(tabs)" />;
+  return null;
 }

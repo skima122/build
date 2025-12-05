@@ -78,7 +78,7 @@ export default function MiningDashboard() {
 
       // Check profile setup (username empty)
       if (!userData.profile || !userData.profile.username) {
-        router.replace("/auth/profilesetup" as unknown as any);
+        router.replace("/auth/profileSetup" as unknown as any);
         return;
       }
 

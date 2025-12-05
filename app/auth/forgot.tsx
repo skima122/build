@@ -1,122 +1,328 @@
-import { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
-import { sendPasswordResetEmail } from "firebase/auth";
+import React, { useState, useRef, useEffect } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  Animated,
+  Easing,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
+import {
+  sendPasswordResetEmail,
+  verifyPasswordResetCode,
+  confirmPasswordReset,
+} from "firebase/auth";
 import { auth } from "../../firebase/firebaseConfig";
 import { Link } from "expo-router";
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [newPass, setNewPass] = useState("");
+
+  const [step, setStep] = useState(1); // 1=email, 2=code, 3=new password
   const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState("");
+
   const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
-  const handleReset = async () => {
-    setMsg("");
+  // Animations
+  const titleAnim = useRef(new Animated.Value(0)).current;
+  const cardAnim = useRef(new Animated.Value(0)).current;
+  const buttonAnim = useRef(new Animated.Value(0)).current;
+  const pressAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.timing(titleAnim, {
+        toValue: 1,
+        duration: 350,
+        easing: Easing.out(Easing.exp),
+        useNativeDriver: true,
+      }),
+      Animated.timing(cardAnim, {
+        toValue: 1,
+        duration: 450,
+        easing: Easing.out(Easing.exp),
+        useNativeDriver: true,
+      }),
+      Animated.timing(buttonAnim, {
+        toValue: 1,
+        duration: 350,
+        easing: Easing.out(Easing.exp),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const pressIn = () => {
+    Animated.spring(pressAnim, { toValue: 0.96, useNativeDriver: true }).start();
+  };
+  const pressOut = () => {
+    Animated.spring(pressAnim, { toValue: 1, friction: 6, useNativeDriver: true }).start();
+  };
+
+  const sendEmailCode = async () => {
     setErrorMsg("");
+    setSuccessMsg("");
 
-    if (!email.trim()) {
-      setErrorMsg("Email is required");
-      return;
-    }
+    if (!email.trim()) return setErrorMsg("Email is required");
 
     setLoading(true);
-
     try {
       await sendPasswordResetEmail(auth, email.trim());
-      setMsg("Password reset link sent to your email");
-    } catch (error: any) {
-      setErrorMsg(error.message);
+      setSuccessMsg("Verification code sent to your email.");
+      setStep(2);
+    } catch (err: any) {
+      setErrorMsg(err.message);
     }
+    setLoading(false);
+  };
 
+  const verifyCode = async () => {
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    if (!code.trim()) return setErrorMsg("Code is required");
+
+    setLoading(true);
+    try {
+      await verifyPasswordResetCode(auth, code.trim());
+      setSuccessMsg("Code verified! Enter your new password.");
+      setStep(3);
+    } catch (err: any) {
+      setErrorMsg("Invalid or expired code.");
+    }
+    setLoading(false);
+  };
+
+  const resetPasswordNow = async () => {
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    if (!newPass.trim()) return setErrorMsg("Password cannot be empty");
+
+    setLoading(true);
+    try {
+      await confirmPasswordReset(auth, code.trim(), newPass);
+      Alert.alert("Success", "Your password has been reset.");
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    }
     setLoading(false);
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Reset Password</Text>
-      <Text style={styles.subtitle}>Enter your email to receive reset instructions</Text>
+    <KeyboardAvoidingView
+      behavior={Platform.select({ ios: "padding", android: undefined })}
+      style={styles.container}
+    >
+      <Animated.View
+        style={[
+          styles.header,
+          {
+            opacity: titleAnim,
+            transform: [
+              {
+                translateY: titleAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [20, 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <Text style={styles.title}>Reset Password</Text>
+        <Text style={styles.subtitle}>Follow the steps to recover your account</Text>
+      </Animated.View>
 
-      {msg ? <Text style={styles.success}>{msg}</Text> : null}
-      {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
+      <Animated.View
+        style={[
+          styles.card,
+          {
+            opacity: cardAnim,
+            transform: [
+              {
+                translateY: cardAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [30, 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        {errorMsg ? <Text style={styles.error}>{errorMsg}</Text> : null}
+        {successMsg ? <Text style={styles.success}>{successMsg}</Text> : null}
 
-      <TextInput
-        style={styles.input}
-        placeholder="Enter your email"
-        placeholderTextColor="#aaa"
-        autoCapitalize="none"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-      />
+        {step === 1 && (
+          <>
+            <Text style={styles.label}>Email Address</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your email"
+              placeholderTextColor="rgba(255,255,255,0.35)"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              value={email}
+              onChangeText={setEmail}
+            />
+          </>
+        )}
 
-      <TouchableOpacity style={styles.btn} onPress={handleReset} disabled={loading}>
-        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Send Reset Link</Text>}
-      </TouchableOpacity>
+        {step === 2 && (
+          <>
+            <Text style={styles.label}>Verification Code</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Paste the code from email"
+              placeholderTextColor="rgba(255,255,255,0.35)"
+              value={code}
+              onChangeText={setCode}
+            />
+          </>
+        )}
 
-      <View style={styles.row}>
-        <Text style={styles.text}>Remember your password?</Text>
-        <Link href="/auth/login" style={styles.link}> Login</Link>
-      </View>
-    </View>
+        {step === 3 && (
+          <>
+            <Text style={styles.label}>New Password</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter new password"
+              placeholderTextColor="rgba(255,255,255,0.35)"
+              secureTextEntry
+              value={newPass}
+              onChangeText={setNewPass}
+            />
+          </>
+        )}
+      </Animated.View>
+
+      <Animated.View
+        style={[
+          styles.footer,
+          {
+            opacity: buttonAnim,
+            transform: [
+              {
+                translateY: buttonAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [20, 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <Animated.View style={{ transform: [{ scale: pressAnim }] }}>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPressIn={pressIn}
+            onPressOut={pressOut}
+            onPress={
+              step === 1 ? sendEmailCode : step === 2 ? verifyCode : resetPasswordNow
+            }
+            style={styles.primaryButton}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.primaryButtonText}>
+                {step === 1 && "Send Code"}
+                {step === 2 && "Verify Code"}
+                {step === 3 && "Reset Password"}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+
+        <View style={styles.row}>
+          <Text style={styles.backText}>Remember your password?</Text>
+          <Link href="/auth/login" style={styles.backLink}> Login</Link>
+        </View>
+      </Animated.View>
+    </KeyboardAvoidingView>
   );
 }
+
+const BLUE = "#377dff";
+const DARK = "#000";
+const CARD = "#0b0b0b";
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0d0d0d",
-    padding: 24,
-    justifyContent: "center",
+    backgroundColor: DARK,
+    paddingHorizontal: 20,
+    paddingTop: 26,
+    paddingBottom: 26,
+    justifyContent: "space-between",
   },
+
+  header: { marginBottom: 10 },
   title: {
-    fontSize: 32,
-    fontWeight: "900",
     color: "#fff",
-    marginBottom: 4,
+    fontSize: 26,
+    fontWeight: "700",
+    marginBottom: 6,
   },
   subtitle: {
-    color: "#aaa",
-    marginBottom: 20,
+    color: "rgba(255,255,255,0.6)",
+    fontSize: 13,
   },
-  input: {
-    backgroundColor: "#1a1a1a",
-    padding: 14,
-    borderRadius: 10,
-    color: "#fff",
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#222",
-  },
-  btn: {
-    backgroundColor: "#5b3deb",
+
+  card: {
+    backgroundColor: CARD,
+    borderRadius: 14,
     padding: 16,
-    borderRadius: 10,
-    alignItems: "center",
-    marginTop: 10,
   },
-  btnText: {
+
+  label: {
+    color: "rgba(255,255,255,0.75)",
+    marginBottom: 6,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+
+  input: {
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
     color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    fontSize: 15,
+    marginBottom: 12,
   },
-  row: {
-    flexDirection: "row",
-    marginTop: 20,
+
+  primaryButton: {
+    backgroundColor: BLUE,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
     justifyContent: "center",
   },
-  text: {
-    color: "#aaa",
+  primaryButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
   },
-  link: {
-    color: "#5b3deb",
-    fontWeight: "bold",
-  },
-  success: {
-    color: "#4caf50",
-    marginBottom: 10,
-  },
-  error: {
-    color: "#ff4f4f",
-    marginBottom: 10,
-  },
+
+  footer: { marginTop: 20 },
+
+  backText: { color: "rgba(255,255,255,0.55)" },
+  backLink: { color: BLUE, marginLeft: 4, fontWeight: "700" },
+
+  success: { color: "#4ade80", marginBottom: 8 },
+  error: { color: "#fb7185", marginBottom: 8 },
+
+  row: { flexDirection: "row", marginTop: 16, justifyContent: "center" },
 });
