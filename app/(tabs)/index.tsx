@@ -47,6 +47,11 @@ export default function MiningDashboard() {
   const miningActive = miningData?.miningActive ?? false;
   const balanceBase = miningData?.balance ?? 0;
 
+  const [boostOpen, setBoostOpen] = useState(false);
+const [dailyOpen, setDailyOpen] = useState(false);
+const [watchOpen, setWatchOpen] = useState(false);
+
+
   // session live values (computed every second)
   const [sessionBalance, setSessionBalance] = useState<number>(0);
   const [sessionElapsed, setSessionElapsed] = useState<number>(0); // seconds
@@ -361,19 +366,23 @@ useEffect(() => {
         </View>
 
         {/* Utilities row (inline components imported from components) */}
-        <View style={styles.utilityRow}>
-          <View style={styles.utilityItem}>
-            <DailyClaim />
-          </View>
+<Pressable style={styles.utilityItem} onPress={() => setDailyOpen(true)}>
+  <Text style={{ color: "#fff" }}>Daily Claim</Text>
+</Pressable>
 
-          <View style={styles.utilityItem}>
-            <Boost />
-          </View>
+<Pressable style={styles.utilityItem} onPress={() => setBoostOpen(true)}>
+  <Text style={{ color: "#fff" }}>Boost</Text>
+</Pressable>
 
-          <View style={styles.utilityItem}>
-            <WatchEarn />
-          </View>
-        </View>
+<Pressable style={styles.utilityItem} onPress={() => setWatchOpen(true)}>
+  <Text style={{ color: "#fff" }}>Watch & Earn</Text>
+</Pressable>
+
+{/* MODALS */}
+<DailyClaim visible={dailyOpen} onClose={() => setDailyOpen(false)} />
+<Boost visible={boostOpen} onClose={() => setBoostOpen(false)} />
+<WatchEarn visible={watchOpen} onClose={() => setWatchOpen(false)} />
+
 
         {/* News & Updates — Premium styled */}
         <View style={styles.newsSection}>
