@@ -1,52 +1,120 @@
-// app/(tabs)/watch-earn.tsx
-import { View, Text, Modal, Pressable, StyleSheet } from "react-native";
-import { useState } from "react";
-import { auth } from "../firebase/firebaseConfig";
+// app/(tabs)/Watch-earn.tsx
+import {
+  View,
+  Text,
+  Modal,
+  Pressable,
+  StyleSheet,
+  ActivityIndicator,
+} from "react-native";
+import { useEffect, useState } from "react";
+import { auth, db } from "../firebase/firebaseConfig";
 import { claimWatchEarnReward } from "../firebase/user";
+import { doc, onSnapshot } from "firebase/firestore";
 
 export default function WatchEarn({ visible, onClose }: any) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [completed, setCompleted] = useState(false);
+  const [timer, setTimer] = useState(0);
+  const [stats, setStats] = useState({
+    totalWatched: 0,
+    totalEarned: 0,
+  });
 
-  const handleWatch = async () => {
+  // ✅ LIVE FIREBASE STATS
+  useEffect(() => {
     if (!auth.currentUser) return;
+
+    const ref = doc(db, "users", auth.currentUser.uid);
+    const unsub = onSnapshot(ref, (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      setStats(
+        data.watchEarn ?? {
+          totalWatched: 0,
+          totalEarned: 0,
+        }
+      );
+    });
+
+    return () => unsub();
+  }, []);
+
+  // ✅ FAKE REWARDED AD COUNTDOWN
+  useEffect(() => {
+    if (!loading || timer === 0) return;
+    const iv = setInterval(() => {
+      setTimer((t) => (t > 0 ? t - 1 : 0));
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [loading, timer]);
+
+  // ✅ REAL FIREBASE REWARD
+  const handleWatch = async () => {
+    if (!auth.currentUser || loading) return;
 
     setLoading(true);
     setMessage("");
     setCompleted(false);
+    setTimer(6); // ⏱ rewarded ad length
 
-    // ✅ SIMULATED REWARDED AD
     setTimeout(async () => {
-      const reward = await claimWatchEarnReward(auth.currentUser!.uid);
-
-      setMessage(`+${reward.toFixed(2)} VAD earned!`);
-      setCompleted(true);
-      setLoading(false);
-    }, 3000); // fake rewarded ad
+      try {
+        const reward = await claimWatchEarnReward(auth.currentUser!.uid);
+        setMessage(`+${reward.toFixed(2)} VAD credited!`);
+        setCompleted(true);
+      } catch (e) {
+        console.error(e);
+        setMessage("Reward failed. Try again.");
+      } finally {
+        setLoading(false);
+        setTimer(0);
+      }
+    }, 6000);
   };
 
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
         <View style={styles.card}>
-          <Text style={styles.title}>Watch & Earn</Text>
-          <Text style={styles.sub}>Optional rewarded ad</Text>
+          <Text style={styles.title}>🎥 Watch & Earn</Text>
+          <Text style={styles.sub}>Optional rewarded ads for instant VAD</Text>
 
           <View style={styles.rewardBox}>
             <Text style={styles.reward}>+0.25 VAD</Text>
-            <Text style={styles.limit}>Per full watch</Text>
+            <Text style={styles.limit}>Per completed ad</Text>
+          </View>
+
+          <View style={styles.statsRow}>
+            <View style={styles.statBox}>
+              <Text style={styles.statValue}>{stats.totalWatched}</Text>
+              <Text style={styles.statLabel}>Ads Watched</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statValue}>
+                {stats.totalEarned.toFixed(2)}
+              </Text>
+              <Text style={styles.statLabel}>VAD Earned</Text>
+            </View>
           </View>
 
           {!completed && (
             <Pressable
               onPress={handleWatch}
               disabled={loading}
-              style={styles.watchBtn}
+              style={[styles.watchBtn, loading && { opacity: 0.6 }]}
             >
-              <Text style={styles.watchText}>
-                {loading ? "Watching..." : "Watch Ad"}
-              </Text>
+              {loading ? (
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <ActivityIndicator color="#000" />
+                  <Text style={styles.watchText}>
+                    Watching ({timer}s)
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.watchText}>Watch Ad</Text>
+              )}
             </Pressable>
           )}
 
@@ -60,7 +128,7 @@ export default function WatchEarn({ visible, onClose }: any) {
 
           {!loading && !completed && (
             <Pressable onPress={onClose} style={styles.skipBtn}>
-              <Text style={styles.skipText}>Skip</Text>
+              <Text style={styles.skipText}>Close</Text>
             </Pressable>
           )}
         </View>
@@ -72,56 +140,129 @@ export default function WatchEarn({ visible, onClose }: any) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.8)",
+    backgroundColor: "rgba(5,5,15,0.9)",
     justifyContent: "center",
     alignItems: "center",
   },
+
   card: {
-    backgroundColor: "#0f1320",
-    width: "90%",
-    borderRadius: 22,
+    backgroundColor: "#0B1020",
+    width: "92%",
+    borderRadius: 26,
     padding: 26,
     borderWidth: 1,
-    borderColor: "#FACC15",
+    borderColor: "rgba(250,204,21,0.45)",
+    shadowColor: "#FACC15",
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 14,
   },
-  title: { color: "#fff", fontSize: 22, fontWeight: "900" },
-  sub: { color: "#9FA8C7", marginTop: 6, fontSize: 13 },
+
+  title: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+
+  sub: {
+    color: "#9FA8C7",
+    marginTop: 6,
+    fontSize: 13,
+    textAlign: "center",
+  },
 
   rewardBox: {
+    marginTop: 20,
+    backgroundColor: "rgba(250,204,21,0.18)",
+    paddingVertical: 18,
+    borderRadius: 18,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(250,204,21,0.3)",
+  },
+
+  reward: {
+    color: "#FACC15",
+    fontSize: 30,
+    fontWeight: "900",
+  },
+
+  limit: {
+    color: "#9FA8C7",
+    fontSize: 12,
+    marginTop: 4,
+  },
+
+  statsRow: {
     marginTop: 18,
-    backgroundColor: "rgba(250,204,21,0.12)",
-    padding: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+
+  statBox: {
+    flex: 1,
+    marginHorizontal: 6,
+    backgroundColor: "#131933",
+    paddingVertical: 14,
     borderRadius: 16,
     alignItems: "center",
   },
-  reward: { color: "#FACC15", fontSize: 26, fontWeight: "900" },
-  limit: { color: "#9FA8C7", fontSize: 12 },
+
+  statValue: {
+    color: "#FACC15",
+    fontWeight: "900",
+    fontSize: 18,
+  },
+
+  statLabel: {
+    color: "#9FA8C7",
+    fontSize: 11,
+    marginTop: 2,
+  },
 
   watchBtn: {
-    marginTop: 20,
+    marginTop: 22,
     backgroundColor: "#FACC15",
-    paddingVertical: 14,
-    borderRadius: 14,
+    paddingVertical: 16,
+    borderRadius: 18,
     alignItems: "center",
   },
-  watchText: { color: "#000", fontWeight: "900" },
+
+  watchText: {
+    color: "#000",
+    fontWeight: "900",
+    fontSize: 15,
+  },
 
   doneBtn: {
-    marginTop: 20,
+    marginTop: 22,
     backgroundColor: "#34D399",
-    paddingVertical: 14,
-    borderRadius: 14,
+    paddingVertical: 16,
+    borderRadius: 18,
     alignItems: "center",
   },
-  doneText: { color: "#000", fontWeight: "900" },
+
+  doneText: {
+    color: "#000",
+    fontWeight: "900",
+  },
 
   message: {
     marginTop: 16,
     color: "#FACC15",
     textAlign: "center",
     fontWeight: "800",
+    fontSize: 13,
   },
 
-  skipBtn: { marginTop: 18, alignItems: "center" },
-  skipText: { color: "#9FA8C7" },
+  skipBtn: {
+    marginTop: 18,
+    alignItems: "center",
+  },
+
+  skipText: {
+    color: "#9FA8C7",
+    fontWeight: "600",
+  },
 });

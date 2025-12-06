@@ -6,7 +6,6 @@ import {
   startMining as startMiningFirebase,
   stopMining as stopMiningFirebase,
   claimMiningReward as claimMiningRewardFirebase,
-  getUserData,
 } from "../firebase/user";
 import { MiningData, UserProfile } from "../firebase/types";
 
@@ -15,11 +14,15 @@ export function useMining() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // new: feature states
+  const [dailyClaim, setDailyClaim] = useState<any | null>(null);
+  const [boost, setBoost] = useState<any | null>(null);
+  const [watchEarn, setWatchEarn] = useState<any | null>(null);
+
   // Local UI-only state for live animation of the active session
   const [liveSessionStart, setLiveSessionStart] = useState<Timestamp | null>(null);
   const tickRef = useRef<number | null>(null);
 
-  // Subscribe to user's document for live updates
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) {
@@ -35,6 +38,9 @@ export function useMining() {
         if (!snap.exists()) {
           setUserProfile(null);
           setMiningData(null);
+          setDailyClaim(null);
+          setBoost(null);
+          setWatchEarn(null);
           setIsLoading(false);
           return;
         }
@@ -42,6 +48,11 @@ export function useMining() {
         const data = snap.data();
         setUserProfile(data.profile ?? null);
         setMiningData(data.mining ?? null);
+
+        // new subscriptions
+        setDailyClaim(data.dailyClaim ?? { lastClaim: null, streak: 0, totalEarned: 0 });
+        setBoost(data.boost ?? { usedToday: 0, lastReset: null, balance: 0 });
+        setWatchEarn(data.watchEarn ?? { totalWatched: 0, totalEarned: 0 });
 
         // reflect lastStart locally for animation
         setLiveSessionStart(data.mining?.lastStart ?? null);
@@ -63,13 +74,12 @@ export function useMining() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Start mining (server call) — optimistic UI handled by snapshot
+  // Start mining (server call)
   const start = useCallback(async () => {
     const user = auth.currentUser;
     if (!user) return;
     try {
       await startMiningFirebase(user.uid);
-      // liveSessionStart will update from the onSnapshot listener (serverTimestamp)
     } catch (err) {
       console.error("start mining failed", err);
       throw err;
@@ -132,6 +142,9 @@ export function useMining() {
   return {
     miningData,
     userProfile,
+    dailyClaim,
+    boost,
+    watchEarn,
     isLoading,
     start,
     stop,
