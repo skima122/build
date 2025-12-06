@@ -2,11 +2,17 @@ import { Tabs } from "expo-router";
 import React from "react";
 import { Platform, View } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 
 import { HapticTab } from "@/components/haptic-tab";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+
+let BlurView: any = null;
+
+if (Platform.OS === "ios") {
+  BlurView = require("expo-blur").BlurView;
+}
+
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();

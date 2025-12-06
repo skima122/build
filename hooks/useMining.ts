@@ -46,7 +46,14 @@ export function useMining() {
         }
 
         const data = snap.data();
-        setUserProfile(data.profile ?? null);
+ setUserProfile({
+  username: data.username ?? "",
+  avatarUrl: data.avatarUrl ?? null,
+  referralCode: data.referralCode ?? "",
+  referredBy: data.referredBy ?? null,
+  createdAt: data.createdAt,
+});
+
         setMiningData(data.mining ?? null);
 
         // new subscriptions

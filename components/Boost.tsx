@@ -28,6 +28,13 @@ export default function Boost({ visible, onClose }: any) {
   const [timer, setTimer] = useState(0);
   const [cooldownMs, setCooldownMs] = useState(0);
 
+  useEffect(() => {
+    if (!auth.currentUser && visible) {
+      onClose?.();
+    }
+  }, [visible]);
+  
+
   const usedToday = boost?.usedToday ?? 0;
   const remaining = Math.max(0, 3 - usedToday);
 

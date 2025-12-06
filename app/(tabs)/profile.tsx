@@ -46,9 +46,10 @@ export default function ProfileScreen() {
       if (!snap.exists()) return;
       const data = snap.data();
 
-      setUsername(data.profile?.username || "");
-      setReferralCode(data.profile?.referralCode || "");
-      setReferredBy(data.profile?.referredBy || null);
+      setUsername(data.username || "");
+setReferralCode(data.referralCode || "");
+setReferredBy(data.referredBy || null);
+
 
       setMiningBalance(data.mining?.balance || 0);
       setDailyTotal(data.dailyClaim?.totalEarned || 0);

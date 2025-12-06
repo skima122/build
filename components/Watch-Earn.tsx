@@ -22,6 +22,13 @@ export default function WatchEarn({ visible, onClose }: any) {
     totalEarned: 0,
   });
 
+    useEffect(() => {
+    if (!auth.currentUser && visible) {
+      onClose?.();
+    }
+  }, [visible]);
+
+
   // ✅ LIVE FIREBASE STATS
   useEffect(() => {
     if (!auth.currentUser) return;

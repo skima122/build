@@ -30,6 +30,13 @@ export default function DailyClaim({ visible, onClose }: any) {
   const [timer, setTimer] = useState(0); // countdown seconds while "ad" plays
   const [cooldownMs, setCooldownMs] = useState<number>(0);
 
+    useEffect(() => {
+    if (!auth.currentUser && visible) {
+      onClose?.();
+    }
+  }, [visible]);
+
+
   // update cooldown based on dailyClaim.lastClaim
   useEffect(() => {
     if (!dailyClaim || !dailyClaim.lastClaim) {

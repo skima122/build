@@ -47,24 +47,23 @@ export async function createUserInFirestore(referredBy: string | null = null) {
   };
 
   await setDoc(userRef, {
-    profile,
-    mining,
-    referrals,
+  profile,
+  mining,
+  referrals,
 
-    // ✅ BOOST INIT
-    boost: {
-      usedToday: 0,
-      lastReset: serverTimestamp(),
-      balance: 0,
-    },
+  boost: {
+    usedToday: 0,
+    lastReset: serverTimestamp(),
+    balance: 0,
+  },
 
-    // ✅ DAILY CLAIM INIT (for later)
-    dailyClaim: {
-      lastClaim: null,
-      streak: 0,
-      totalEarned: 0,
-    },
-  });
+  dailyClaim: {
+    lastClaim: null,
+    streak: 0,
+    totalEarned: 0,
+  },
+});
+
 }
 
 // ------------------------------
