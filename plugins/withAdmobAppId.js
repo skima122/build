@@ -1,46 +1,50 @@
-// plugins/withAdmobAppId.js
 const { withAndroidManifest } = require("@expo/config-plugins");
 
 function setAdmobApplicationId(androidManifest, appId) {
   const app = androidManifest.manifest.application?.[0];
 
-  if (!app) {
-    throw new Error("AndroidManifest: <application> tag not found.");
-  }
+    if (!app) {
+        throw new Error("AndroidManifest: <application> tag not found.");
+          }
 
-  if (!app["meta-data"]) {
-    app["meta-data"] = [];
-  }
+            // Ensure tools namespace exists
+              androidManifest.manifest.$["xmlns:tools"] =
+                  "http://schemas.android.com/tools";
 
-  // Remove old metadata if exists
-  app["meta-data"] = app["meta-data"].filter(
-    (item) =>
-      item.$["android:name"] !== "com.google.android.gms.ads.APPLICATION_ID"
-  );
+                    if (!app["meta-data"]) {
+                        app["meta-data"] = [];
+                          }
 
-  // Add new metadata
-  app["meta-data"].push({
-    $: {
-      "android:name": "com.google.android.gms.ads.APPLICATION_ID",
-      "android:value": appId,
-    },
-  });
+                            // Remove previous conflicting meta-data
+                              app["meta-data"] = app["meta-data"].filter(
+                                  (item) =>
+                                        item.$["android:name"] !==
+                                              "com.google.android.gms.ads.APPLICATION_ID"
+                                                );
 
-  return androidManifest;
-}
+                                                  // Add our meta-data with tools:replace
+                                                    app["meta-data"].push({
+                                                        $: {
+                                                              "android:name": "com.google.android.gms.ads.APPLICATION_ID",
+                                                                    "android:value": appId,
+                                                                          "tools:replace": "android:value",
+                                                                              },
+                                                                                });
 
-module.exports = function withAdmobAppId(config) {
-  return withAndroidManifest(config, (config) => {
-    const appId = config.extra?.reactNativeGoogleMobileAdsAppId;
+                                                                                  return androidManifest;
+                                                                                  }
 
-    if (!appId) {
-      throw new Error(
-        "Missing AdMob App ID → add it in app.json under `extra.reactNativeGoogleMobileAdsAppId`"
-      );
-    }
+                                                                                  module.exports = function withAdmobAppId(config) {
+                                                                                    return withAndroidManifest(config, (config) => {
+                                                                                        const appId = config.extra?.reactNativeGoogleMobileAdsAppId;
 
-    config.modResults = setAdmobApplicationId(config.modResults, appId);
+                                                                                            if (!appId) {
+                                                                                                  throw new Error(
+                                                                                                          "Missing AdMob App ID → add it in app.json under extra.reactNativeGoogleMobileAdsAppId"
+                                                                                                                );
+                                                                                                                    }
 
-    return config;
-  });
-};
+                                                                                                                        config.modResults = setAdmobApplicationId(config.modResults, appId);
+                                                                                                                            return config;
+                                                                                                                              });
+                                                                                                                              };
