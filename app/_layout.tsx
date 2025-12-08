@@ -1,3 +1,5 @@
+//app/_layout.tsx
+
 import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -6,7 +8,7 @@ import { auth, db, storage } from "../firebase/firebaseConfig";
 import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import mobileAds from 'react-native-google-mobile-ads';
+
 
 
 export default function RootLayout() {
