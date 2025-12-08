@@ -48,7 +48,8 @@
       "expo-font",
       "expo-web-browser",
       "expo-build-properties",
-      "./plugins/withAdmobAppId"
+      "./plugins/withAdmobAppId",
+      "react-native-google-mobile-ads"
     ],
     "experiments": {
       "typedRoutes": true,
