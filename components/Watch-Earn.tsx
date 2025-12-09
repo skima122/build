@@ -1,5 +1,5 @@
 // app/components/Watch-earn.tsx
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -13,8 +13,17 @@ import { claimWatchEarnReward } from "../firebase/user";
 import { doc, onSnapshot } from "firebase/firestore";
 import { showRewardedAd } from "../components/RewardedAd";
 
-export default function WatchEarn({ visible = false, onClose }: any) {
-  const user = auth?.currentUser ?? null;
+type WatchEarnProps = {
+  visible?: boolean;
+  onClose?: () => void;
+};
+
+export default function WatchEarn({
+  visible = false,
+  onClose,
+}: WatchEarnProps) {
+  const user = auth.currentUser ?? null;
+  const uid = user?.uid;
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -24,22 +33,32 @@ export default function WatchEarn({ visible = false, onClose }: any) {
     totalEarned: 0,
   });
 
-  // 🚫 Close if logged out
+  /* ✅ Prevent setState after unmount */
+  const mountedRef = useRef(true);
   useEffect(() => {
-    if (visible && !user) {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  /* ✅ Close if logged out */
+  useEffect(() => {
+    if (visible && !uid) {
       onClose?.();
     }
-  }, [visible, user]);
+  }, [visible, uid, onClose]);
 
-  // 🔥 Firebase stats
+  /* ✅ Live Firebase stats (guarded) */
   useEffect(() => {
-    if (!user) return;
+    if (!uid) return;
 
-    const ref = doc(db, "users", user.uid);
+    const ref = doc(db, "users", uid);
     const unsub = onSnapshot(
       ref,
       (snap) => {
-        if (!snap.exists()) return;
+        if (!snap.exists() || !mountedRef.current) return;
+
         const data = snap.data() ?? {};
         const watch = data.watchEarn ?? {};
 
@@ -52,32 +71,38 @@ export default function WatchEarn({ visible = false, onClose }: any) {
     );
 
     return () => unsub();
-  }, [user]);
+  }, [uid]);
 
-  // 🎥 Real rewarded ad flow
+  /* ✅ REAL rewarded ad flow (anti-exploit protected) */
   const handleWatch = useCallback(async () => {
-    if (!user || loading) return;
+    if (!uid || loading) return;
 
     try {
       setLoading(true);
       setCompleted(false);
       setMessage("");
 
-      // Show rewarded ad
+      // 🎥 Show rewarded ad
       await showRewardedAd();
 
-      // ✅ After ad is completed
-      const reward = await claimWatchEarnReward(user.uid);
+      if (!mountedRef.current) return;
+
+      // ✅ Claim only AFTER ad completes
+      const reward = await claimWatchEarnReward(uid);
+
+      if (!mountedRef.current) return;
 
       const amt = typeof reward === "number" ? reward : 0;
       setMessage(`+${amt.toFixed(2)} VAD credited!`);
       setCompleted(true);
     } catch (e) {
-      setMessage("Ad not completed or failed.");
+      if (mountedRef.current) {
+        setMessage("Ad not completed or failed.");
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
-  }, [user, loading]);
+  }, [uid, loading]);
 
   const closeIfIdle = useCallback(() => {
     if (!loading) onClose?.();
@@ -85,6 +110,8 @@ export default function WatchEarn({ visible = false, onClose }: any) {
 
   const totalEarned = stats.totalEarned ?? 0;
   const totalWatched = stats.totalWatched ?? 0;
+
+  if (!visible) return null;
 
   return (
     <Modal
@@ -109,7 +136,9 @@ export default function WatchEarn({ visible = false, onClose }: any) {
               <Text style={styles.statLabel}>Ads Watched</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statValue}>{totalEarned.toFixed(2)}</Text>
+              <Text style={styles.statValue}>
+                {totalEarned.toFixed(2)}
+              </Text>
               <Text style={styles.statLabel}>VAD Earned</Text>
             </View>
           </View>
@@ -151,6 +180,7 @@ export default function WatchEarn({ visible = false, onClose }: any) {
     </Modal>
   );
 }
+
 
 // styles stay unchanged
 

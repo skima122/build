@@ -6,10 +6,9 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  ActivityIndicator,
 } from "react-native";
 import { useInterstitialAd } from "react-native-google-mobile-ads";
-import { auth, db } from "../firebase/firebaseConfig";
+import { auth } from "../firebase/firebaseConfig";
 import { claimBoostReward } from "../firebase/user";
 import { useMining } from "../hooks/useMining";
 import { Timestamp } from "firebase/firestore";
@@ -30,7 +29,7 @@ function timeLeft(ms: number) {
 export default function Boost({ visible, onClose }: BoostProps) {
   const { boost } = useMining();
 
-  // ✅ Freeze boost to avoid re-hook crashes
+  // ✅ Freeze boost snapshot
   const boostSafe = useMemo(() => boost ?? null, [boost]);
 
   const [loading, setLoading] = useState(false);
@@ -38,17 +37,18 @@ export default function Boost({ visible, onClose }: BoostProps) {
   const [cooldownMs, setCooldownMs] = useState(0);
 
   const mountedRef = useRef(true);
+  const rewardPendingRef = useRef(false); // ✅ prevents multi-reward exploit
 
-  // ✅ SAFE Ad Hook Placement (TOP LEVEL ALWAYS)
+  /* ✅ Proper Ad Unit handling */
   const adUnitId = __DEV__
     ? "ca-app-pub-3940256099942544/1033173712"
-    : "YOUR_REAL_AD_ID";
+    : "YOUR_REAL_PRODUCTION_AD_UNIT_ID";
 
   const { isLoaded, isClosed, load, show } = useInterstitialAd(adUnitId, {
     requestNonPersonalizedAdsOnly: true,
   });
 
-  // cleanup guard
+  /* ✅ Safe unmount */
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -56,6 +56,7 @@ export default function Boost({ visible, onClose }: BoostProps) {
     };
   }, []);
 
+  /* ✅ Auto close if logged out */
   useEffect(() => {
     if (!auth.currentUser && visible) onClose?.();
   }, [visible, onClose]);
@@ -63,7 +64,7 @@ export default function Boost({ visible, onClose }: BoostProps) {
   const usedToday = boostSafe?.usedToday ?? 0;
   const remaining = Math.max(0, 3 - usedToday);
 
-  // ✅ Daily timer
+  /* ✅ Daily cooldown timer (bulletproof timestamp parsing) */
   useEffect(() => {
     if (!boostSafe?.lastReset) {
       setCooldownMs(0);
@@ -83,45 +84,48 @@ export default function Boost({ visible, onClose }: BoostProps) {
     }
 
     const DAY = 86400000;
-    const iv = setInterval(() => {
+
+    const update = () => {
       if (!mountedRef.current) return;
       const remain = Math.max(0, DAY - (Date.now() - lastMs));
       setCooldownMs(remain);
-    }, 30000);
+    };
+
+    update();
+    const iv = setInterval(update, 30000);
 
     return () => clearInterval(iv);
   }, [boostSafe?.lastReset]);
 
-  // ✅ Run reward only when ad closes
-  const runReward = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user || !mountedRef.current) return;
-
-      const reward = await claimBoostReward(user.uid);
-
-      if (!mountedRef.current) return;
-
-      if (reward === 0) {
-        setMessage("Boost limit reached.");
-      } else {
-        setMessage(`+${reward.toFixed(1)} VAD added!`);
-      }
-    } catch (err) {
-      console.error("Boost error:", err);
-      if (mountedRef.current) setMessage("Boost failed.");
-    } finally {
-      if (mountedRef.current) setLoading(false);
-    }
-  };
-
-  // ✅ Trigger reward only after ad is closed
+  /* ✅ Reward only after ad closes (ONE-TIME ONLY) */
   useEffect(() => {
-    if (isClosed && loading) {
-      runReward();
-    }
-  }, [isClosed, loading]);
+    if (!isClosed || !rewardPendingRef.current) return;
 
+    rewardPendingRef.current = false;
+
+    (async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user || !mountedRef.current) return;
+
+        const reward = await claimBoostReward(user.uid);
+        if (!mountedRef.current) return;
+
+        if (reward === 0) {
+          setMessage("Boost limit reached.");
+        } else {
+          setMessage(`+${reward.toFixed(1)} VAD added!`);
+        }
+      } catch (err) {
+        console.error("Boost error:", err);
+        if (mountedRef.current) setMessage("Boost failed.");
+      } finally {
+        if (mountedRef.current) setLoading(false);
+      }
+    })();
+  }, [isClosed]);
+
+  /* ✅ Button handler */
   const handleWatchAd = async () => {
     if (!auth.currentUser) {
       setMessage("Login required.");
@@ -132,6 +136,7 @@ export default function Boost({ visible, onClose }: BoostProps) {
 
     setLoading(true);
     setMessage("");
+    rewardPendingRef.current = true;
 
     if (!isLoaded) {
       load();
@@ -145,6 +150,8 @@ export default function Boost({ visible, onClose }: BoostProps) {
     if (remaining === 0) return `Next reset in ${timeLeft(cooldownMs)}`;
     return `${remaining} boosts remaining today`;
   }, [remaining, cooldownMs]);
+
+  if (!visible) return null;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -183,7 +190,11 @@ export default function Boost({ visible, onClose }: BoostProps) {
             ]}
           >
             <Text style={styles.watchText}>
-              {loading ? "Loading ad..." : remaining === 0 ? "No Boosts Left" : "Watch Ad"}
+              {loading
+                ? "Loading ad..."
+                : remaining === 0
+                ? "No Boosts Left"
+                : "Watch Ad"}
             </Text>
           </Pressable>
 

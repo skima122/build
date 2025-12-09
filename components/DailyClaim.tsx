@@ -1,5 +1,4 @@
 // components/DailyClaim.tsx
-// components/DailyClaim.tsx
 import {
   View,
   Text,
@@ -9,11 +8,15 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useEffect, useRef, useState, useMemo } from "react";
-import { auth, db } from "../firebase/firebaseConfig";
+import { auth } from "../firebase/firebaseConfig";
 import { claimDailyReward } from "../firebase/user";
 import { useMining } from "../hooks/useMining";
-import { Timestamp } from "firebase/firestore";
 import { useInterstitialAd } from "react-native-google-mobile-ads";
+
+type DailyClaimProps = {
+  visible: boolean;
+  onClose?: () => void;
+};
 
 const STREAK_REWARDS = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 2.0];
 
@@ -25,23 +28,27 @@ function fmtTimeLeft(ms: number) {
   return `${h}h ${m}m`;
 }
 
-export default function DailyClaim({ visible, onClose }: any) {
+export default function DailyClaim({ visible, onClose }: DailyClaimProps) {
   const { dailyClaim } = useMining();
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [cooldownMs, setCooldownMs] = useState(0);
 
-  // ✅ SAFE AD HOOK PLACEMENT (top-level only)
+  /* ✅ SAFE USER GUARD */
+  const uid = auth.currentUser?.uid;
+  if (!uid && visible) return null;
+
+  /* ✅ SAFE AD UNIT (DEV vs PROD) */
   const adUnitId = __DEV__
-    ? "ca-app-pub-3940256099942544/1033173712"
-    : "ca-app-pub-4533962949749202/2761859275";
+    ? "ca-app-pub-3940256099942544/1033173712" // ✅ Test ID
+    : "ca-app-pub-4533962949749202/2761859275"; // ✅ Your real prod ID
 
   const { isLoaded, isClosed, load, show } = useInterstitialAd(adUnitId, {
     requestNonPersonalizedAdsOnly: true,
   });
 
-  // prevent setState after unmount
+  /* ✅ Prevent setState after unmount */
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
@@ -50,14 +57,21 @@ export default function DailyClaim({ visible, onClose }: any) {
     };
   }, []);
 
-  // close if user signed out
+  /* ✅ Close if user signs out */
   useEffect(() => {
     if (!auth.currentUser && visible) {
       onClose?.();
     }
   }, [visible, onClose]);
 
-  // cooldown timer
+  /* ✅ Load ad when modal opens */
+  useEffect(() => {
+    if (visible && !isLoaded) {
+      load();
+    }
+  }, [visible, isLoaded]);
+
+  /* ✅ Cooldown timer */
   useEffect(() => {
     if (!dailyClaim?.lastClaim) {
       setCooldownMs(0);
@@ -65,9 +79,10 @@ export default function DailyClaim({ visible, onClose }: any) {
     }
 
     let lastMs = 0;
+
     try {
       if ((dailyClaim.lastClaim as any)?.toMillis) {
-        lastMs = (dailyClaim.lastClaim as Timestamp).toMillis();
+        lastMs = dailyClaim.lastClaim.toMillis();
       } else {
         const n = Number(dailyClaim.lastClaim);
         lastMs = Number.isFinite(n) ? n : 0;
@@ -87,13 +102,12 @@ export default function DailyClaim({ visible, onClose }: any) {
     return () => clearInterval(iv);
   }, [dailyClaim?.lastClaim]);
 
-  // ✅ run reward ONLY after ad closes
+  /* ✅ Run reward ONLY after ad closes */
   const runReward = async () => {
     try {
-      const u = auth.currentUser;
-      if (!u || !mountedRef.current) return;
+      if (!uid || !mountedRef.current) return;
 
-      const reward = await claimDailyReward(u.uid);
+      const reward = await claimDailyReward(uid);
 
       if (!mountedRef.current) return;
 
@@ -110,7 +124,7 @@ export default function DailyClaim({ visible, onClose }: any) {
     }
   };
 
-  // ✅ trigger reward when ad closes
+  /* ✅ Trigger reward when ad closes */
   useEffect(() => {
     if (isClosed && loading) {
       runReward();
@@ -118,8 +132,7 @@ export default function DailyClaim({ visible, onClose }: any) {
   }, [isClosed, loading]);
 
   const handleClaim = () => {
-    const user = auth.currentUser;
-    if (!user) {
+    if (!uid) {
       setMessage("Please log in to claim.");
       return;
     }
@@ -143,8 +156,15 @@ export default function DailyClaim({ visible, onClose }: any) {
     return cooldownMs > 0 ? fmtTimeLeft(cooldownMs) : "Available now";
   }, [cooldownMs]);
 
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={styles.overlay}>
         <View style={styles.card}>
           <Text style={styles.title}>🔥 Daily Check-In</Text>
@@ -156,18 +176,24 @@ export default function DailyClaim({ visible, onClose }: any) {
             {STREAK_REWARDS.map((r, i) => {
               const day = i + 1;
               const claimed = day <= streak;
+
               return (
                 <View
                   key={day}
                   style={[
                     styles.dayBox,
                     claimed && styles.dayClaimed,
-                    (day % 3 !== 0) && { marginRight: 12 },
+                    day % 3 !== 0 && { marginRight: 12 },
                     day > 3 && { marginTop: 12 },
                   ]}
                 >
                   <Text style={styles.dayLabel}>Day {day}</Text>
-                  <Text style={[styles.dayReward, claimed && styles.dayRewardClaimed]}>
+                  <Text
+                    style={[
+                      styles.dayReward,
+                      claimed && styles.dayRewardClaimed,
+                    ]}
+                  >
                     +{r} VAD
                   </Text>
                   {claimed && <Text style={styles.check}>✔</Text>}
@@ -191,7 +217,7 @@ export default function DailyClaim({ visible, onClose }: any) {
           >
             {loading ? (
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <ActivityIndicator color="#000" />
+                <ActivityIndicator />
                 <Text style={[styles.claimText, { marginLeft: 10 }]}>
                   Loading ad...
                 </Text>
@@ -213,6 +239,7 @@ export default function DailyClaim({ visible, onClose }: any) {
     </Modal>
   );
 }
+
 
 // styles stay the same
 
