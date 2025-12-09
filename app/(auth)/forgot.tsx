@@ -19,7 +19,7 @@ import {
   verifyPasswordResetCode,
   confirmPasswordReset,
 } from "firebase/auth";
-import { auth, db, storage } from "../../firebase/firebaseConfig";
+
 import { Link } from "expo-router";
 
 /* ---------- Expo Router Wrapper (DEFAULT EXPORT) ---------- */
@@ -82,55 +82,64 @@ function ForgotPasswordScreen() {
     Animated.spring(pressAnim, { toValue: 1, friction: 6, useNativeDriver: true }).start();
   };
 
-  const sendEmailCode = async () => {
-    setErrorMsg("");
-    setSuccessMsg("");
+ const sendEmailCode = async () => {
+  setErrorMsg("");
+  setSuccessMsg("");
 
-    if (!email.trim()) return setErrorMsg("Email is required");
+  if (!email.trim()) return setErrorMsg("Email is required");
 
-    setLoading(true);
-    try {
-      await sendPasswordResetEmail(auth, email.trim());
-      setSuccessMsg("Verification code sent to your email.");
-      setStep(2);
-    } catch (err: any) {
-      setErrorMsg(err.message);
-    }
-    setLoading(false);
-  };
+  setLoading(true);
+  try {
+    const { auth } = await import("../../firebase/firebaseConfig");
 
-  const verifyCode = async () => {
-    setErrorMsg("");
-    setSuccessMsg("");
+    await sendPasswordResetEmail(auth, email.trim());
+    setSuccessMsg("Verification code sent to your email.");
+    setStep(2);
+  } catch (err: any) {
+    setErrorMsg(err.message);
+  }
+  setLoading(false);
+};
 
-    if (!code.trim()) return setErrorMsg("Code is required");
 
-    setLoading(true);
-    try {
-      await verifyPasswordResetCode(auth, code.trim());
-      setSuccessMsg("Code verified! Enter your new password.");
-      setStep(3);
-    } catch (err: any) {
-      setErrorMsg("Invalid or expired code.");
-    }
-    setLoading(false);
-  };
+ const verifyCode = async () => {
+  setErrorMsg("");
+  setSuccessMsg("");
+
+  if (!code.trim()) return setErrorMsg("Code is required");
+
+  setLoading(true);
+  try {
+    const { auth } = await import("../../firebase/firebaseConfig");
+
+    await verifyPasswordResetCode(auth, code.trim());
+    setSuccessMsg("Code verified! Enter your new password.");
+    setStep(3);
+  } catch (err: any) {
+    setErrorMsg("Invalid or expired code.");
+  }
+  setLoading(false);
+};
+
 
   const resetPasswordNow = async () => {
-    setErrorMsg("");
-    setSuccessMsg("");
+  setErrorMsg("");
+  setSuccessMsg("");
 
-    if (!newPass.trim()) return setErrorMsg("Password cannot be empty");
+  if (!newPass.trim()) return setErrorMsg("Password cannot be empty");
 
-    setLoading(true);
-    try {
-      await confirmPasswordReset(auth, code.trim(), newPass);
-      Alert.alert("Success", "Your password has been reset.");
-    } catch (err: any) {
-      setErrorMsg(err.message);
-    }
-    setLoading(false);
-  };
+  setLoading(true);
+  try {
+    const { auth } = await import("../../firebase/firebaseConfig");
+
+    await confirmPasswordReset(auth, code.trim(), newPass);
+    Alert.alert("Success", "Your password has been reset.");
+  } catch (err: any) {
+    setErrorMsg(err.message);
+  }
+  setLoading(false);
+};
+
 
   return (
     <KeyboardAvoidingView

@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth, db } from "../../firebase/firebaseConfig";
+//import { auth, db } from "../../firebase/firebaseConfig";//
 import { doc, getDoc } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -40,47 +40,50 @@ function LoginScreen() {
   };
 
   const handleLogin = async () => {
-    if (loading) return;
+  if (loading) return;
 
-    if (!email.trim() || !password) {
-      triggerError("Email and password are required.");
+  if (!email.trim() || !password) {
+    triggerError("Email and password are required.");
+    return;
+  }
+
+  setLoading(true);
+  setErrorMsg("");
+
+  try {
+    // ✅ Load Firebase lazily
+    const { auth, db } = await import("../../firebase/firebaseConfig");
+
+    await signInWithEmailAndPassword(auth, email.trim(), password);
+    const user = auth.currentUser;
+
+    if (!user) {
+      triggerError("Login failed. Try again.");
+      setLoading(false);
       return;
     }
 
-    setLoading(true);
-    setErrorMsg("");
+    const userRef = doc(db, "users", user.uid);
+    const docSnap = await getDoc(userRef);
 
-    try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-      const user = auth.currentUser;
-
-      if (!user) {
-        triggerError("Login failed. Try again.");
-        setLoading(false);
-        return;
-      }
-
-      const userRef = doc(db, "users", user.uid);
-      const docSnap = await getDoc(userRef);
-
-      if (!docSnap.exists()) {
-        router.replace("/(auth)/profileSetup");
-      } else {
-        router.replace("/(tabs)");
-      }
-    } catch (error: any) {
-      let msg = "Login failed.";
-
-      if (error.code === "auth/user-not-found") msg = "No account found.";
-      else if (error.code === "auth/wrong-password") msg = "Incorrect password.";
-      else if (error.code === "auth/invalid-email") msg = "Invalid email format.";
-      else msg = error.message;
-
-      triggerError(msg);
+    if (!docSnap.exists()) {
+      router.replace("/(auth)/profileSetup");
+    } else {
+      router.replace("/(tabs)");
     }
+  } catch (error: any) {
+    let msg = "Login failed.";
 
-    setLoading(false);
-  };
+    if (error.code === "auth/user-not-found") msg = "No account found.";
+    else if (error.code === "auth/wrong-password") msg = "Incorrect password.";
+    else if (error.code === "auth/invalid-email") msg = "Invalid email format.";
+    else msg = error.message;
+
+    triggerError(msg);
+  }
+
+  setLoading(false);
+};
 
   return (
     <View style={styles.container}>

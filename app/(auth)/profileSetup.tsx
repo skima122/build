@@ -18,9 +18,7 @@ import * as ImagePicker from "expo-image-picker"; // 🔒 Kept for future re-ena
 import { useRouter } from "expo-router";
 
 // Firebase
-import { auth, db, storage } from "../../firebase/firebaseConfig";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+
 
 /* ---------- Expo Router Wrapper ---------- */
 export default function ProfileSetup() {
@@ -35,11 +33,24 @@ function ProfileSetupScreen() {
   const [avatar, setAvatar] = useState<string | null>(null); // 🔒 Logic kept
   const [referredBy, setReferredBy] = useState("");
 
-  const user = auth.currentUser;
+const [user, setUser] = useState<any>(null);
+
+useEffect(() => {
+  (async () => {
+    const { auth } = await import("../../firebase/firebaseConfig");
+    setUser(auth.currentUser);
+
+    if (!auth.currentUser) {
+      router.replace("/(auth)/login");
+    }
+  })();
+}, []);
+
+
 
   /** Crash-proof: redirect if no auth user */
   useEffect(() => {
-    if (!user) router.replace("/auth/login");
+    if (!user) router.replace("/(auth)/login");
   }, [user]);
 
   const referralCode = user?.uid?.slice(0, 8) ?? "loading";
@@ -62,41 +73,54 @@ function ProfileSetupScreen() {
     }
   };
 
-  const saveProfile = async () => {
-    if (!username.trim()) {
-      Alert.alert("Error", "Username is required");
-      return;
+ const saveProfile = async () => {
+  if (!username.trim()) {
+    Alert.alert("Error", "Username is required");
+    return;
+  }
+
+  try {
+    // 👇 Lazy import — SAFE for EAS builds
+    const { auth, db, storage } = await import("../../firebase/firebaseConfig");
+    const { ref, uploadBytes, getDownloadURL } = await import("firebase/storage");
+    const { doc, setDoc, serverTimestamp } = await import("firebase/firestore");
+
+    const user = auth.currentUser;
+
+    if (!user) {
+      Alert.alert("Error", "Not authenticated");
+      return router.replace("/(auth)/login");
     }
 
     let avatarUrl: string | null = null;
 
-    try {
-      if (avatar) {
-        /** 🔒 Avatar upload kept but disabled */
-        const imageRef = ref(storage, `avatars/${user?.uid}.jpg`);
+    if (avatar) {
+      const imageRef = ref(storage, `avatars/${user.uid}.jpg`);
 
-        /**
-        const img = await fetch(avatar);
-        const bytes = await img.blob();
-        await uploadBytes(imageRef, bytes);
-        avatarUrl = await getDownloadURL(imageRef);
-        */
-      }
-
-      await setDoc(doc(db, "users", user!.uid), {
-        username: username.trim(),
-        avatarUrl, // null until avatar enabled
-        referralCode,
-        referredBy: referredBy.trim() || null,
-        createdAt: serverTimestamp(),
-      });
-
-      Alert.alert("Success", "Profile saved!");
-      router.replace("/(tabs)");
-    } catch (error: any) {
-      Alert.alert("Error", error.message);
+      /**
+      const img = await fetch(avatar);
+      const bytes = await img.blob();
+      await uploadBytes(imageRef, bytes);
+      avatarUrl = await getDownloadURL(imageRef);
+      */
     }
-  };
+
+    await setDoc(doc(db, "users", user.uid), {
+      username: username.trim(),
+      avatarUrl,
+      referralCode: user.uid.slice(0, 8),
+      referredBy: referredBy.trim() || null,
+      createdAt: serverTimestamp(),
+    });
+
+    Alert.alert("Success", "Profile saved!");
+    router.replace("/(tabs)");
+
+  } catch (error: any) {
+    Alert.alert("Error", error.message);
+  }
+};
+
 
   /* ---------- Animations ---------- */
   const titleAnim = useRef(new Animated.Value(0)).current;

@@ -12,7 +12,7 @@ import {
 } from "react-native";
 
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth, db } from "../../firebase/firebaseConfig";
+import {  db } from "../../firebase/firebaseConfig";
 
 import { Link, useRouter } from "expo-router";
 
@@ -62,38 +62,45 @@ function RegisterScreen() {
   };
 
   const handleRegister = async () => {
-    if (loading) return;
+  if (loading) return;
 
-    if (!email.trim() || !password || !confirm) {
-      return triggerError("All fields are required");
+  if (!email.trim() || !password || !confirm) {
+    return triggerError("All fields are required");
+  }
+
+  if (password !== confirm) return triggerError("Passwords do not match");
+  if (password.length < 6)
+    return triggerError("Password must be at least 6 characters");
+
+  setLoading(true);
+  setErrorMsg("");
+
+  try {
+    // 👇 Lazy import — avoids early Firebase initialization
+    const { auth, db } = await import("../../firebase/firebaseConfig");
+
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
+      email.trim(),
+      password
+    );
+
+    const user = userCredential.user;
+
+    const profileSnap = await getDoc(doc(db, "users", user.uid));
+
+    if (!profileSnap.exists()) {
+      router.replace("/(auth)/profileSetup");
+    } else {
+      router.replace("/(tabs)");
     }
 
-    if (password !== confirm) return triggerError("Passwords do not match");
-    if (password.length < 6)
-      return triggerError("Password must be at least 6 characters");
+  } catch (err: any) {
+    triggerError(err.message);
+  }
 
-    setLoading(true);
-    setErrorMsg("");
-
-    try {
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email.trim(),
-        password
-      );
-
-      const user = userCredential.user;
-      const profileSnap = await getDoc(doc(db, "users", user.uid));
-
-      if (!profileSnap.exists()) router.replace("/(auth)/profileSetup");
-      else router.replace("/(tabs)");
-
-    } catch (err: any) {
-      triggerError(err.message);
-    }
-
-    setLoading(false);
-  };
+  setLoading(false);
+};
 
   return (
     <View style={styles.container}>
