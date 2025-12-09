@@ -63,20 +63,15 @@ export default function RootLayout() {
 
         {/* ✅ PROFILE SETUP */}
         {isAuthenticated && !profileCompleted && (
-          <Stack.Screen name="auth/profileSetup" />
+          <Stack.Screen name="(auth)/profileSetup" />
         )}
 
         {/* ✅ AUTH FLOW */}
         {!isAuthenticated && (
-          <>
-            <Stack.Screen name="auth/index" />
-            <Stack.Screen name="auth/login" />
-            <Stack.Screen name="auth/register" />
-            <Stack.Screen name="auth/forgot" />
-          </>
+          <Stack.Screen name="(auth)" />
         )}
 
-        {/* ✅ OPTIONAL MODALS */}
+        {/* OPTIONAL MODALS */}
         <Stack.Screen name="modal" options={{ presentation: "modal" }} />
 
       </Stack>

@@ -64,7 +64,7 @@ function LoginScreen() {
       const docSnap = await getDoc(userRef);
 
       if (!docSnap.exists()) {
-        router.replace("/auth/profileSetup");
+        router.replace("/(auth)/profileSetup");
       } else {
         router.replace("/(tabs)");
       }
@@ -163,13 +163,13 @@ function LoginScreen() {
         {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.loginText}>Login</Text>}
       </Pressable>
 
-      <Link href="/auth/forgot" style={styles.forgot}>
+      <Link href="/(auth)/forgot" style={styles.forgot}>
         Forgot Password?
       </Link>
 
       <View style={styles.row}>
         <Text style={styles.text}>Don't have an account? </Text>
-        <Link href="/auth/register" style={styles.link}>
+        <Link href="/(auth)/register" style={styles.link}>
           Register
         </Link>
       </View>

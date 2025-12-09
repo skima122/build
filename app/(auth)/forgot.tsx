@@ -260,7 +260,7 @@ function ForgotPasswordScreen() {
 
         <View style={styles.row}>
           <Text style={styles.backText}>Remember your password?</Text>
-          <Link href="/auth/login" style={styles.backLink}> Login</Link>
+          <Link href="/(auth)/login" style={styles.backLink}> Login</Link>
         </View>
       </Animated.View>
     </KeyboardAvoidingView>

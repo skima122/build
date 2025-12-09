@@ -418,7 +418,7 @@ export default function MiningDashboard() {
   =============================================================== */
   const handleStartStop = async () => {
     const user = auth.currentUser;
-    if (!user) return router.push("/auth/login");
+    if (!user) return router.push("/(auth)/login");
 
     try {
       if (!miningActive) {
@@ -439,7 +439,7 @@ export default function MiningDashboard() {
   =============================================================== */
   const handleClaim = async () => {
     const user = auth.currentUser;
-    if (!user) return router.push("/auth/login");
+    if (!user) return router.push("/(auth)/login");
 
     try {
       setIsClaiming(true);

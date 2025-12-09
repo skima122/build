@@ -85,7 +85,7 @@ function RegisterScreen() {
       const user = userCredential.user;
       const profileSnap = await getDoc(doc(db, "users", user.uid));
 
-      if (!profileSnap.exists()) router.replace("/auth/profileSetup");
+      if (!profileSnap.exists()) router.replace("/(auth)/profileSetup");
       else router.replace("/(tabs)");
 
     } catch (err: any) {
@@ -193,7 +193,7 @@ function RegisterScreen() {
       {/* LOGIN LINK */}
       <View style={styles.row}>
         <Text style={styles.text}>Already have an account?</Text>
-        <Link href="/auth/login" style={styles.link}>
+        <Link href="/(auth)/login" style={styles.link}>
           {" "}
           Login
         </Link>
