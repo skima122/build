@@ -1,24 +1,31 @@
-// firebase/firebaseConfig.ts
-import { initializeApp, getApps, getApp } from "firebase/app";
+import {
+  initializeApp,
+  getApps,
+  FirebaseApp
+} from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
-// --- DIRECT FIREBASE WEB CONFIG (Correct for React Native / Expo) ---
 const firebaseConfig = {
-  apiKey: "AIzaSyAap9MZDpdpsixSY1dD5m4x_XXj1poM6d0",
-  authDomain: "vad-app-4a6e8.firebaseapp.com",
-  projectId: "vad-app-4a6e8",
-  storageBucket: "vad-app-4a6e8.firebasestorage.app",
-  messagingSenderId: "98354868664",
-  appId: "1:98354868664:web:441334cb2f14a3712f9f4d",
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY!,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN!,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID!,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET!,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID!,
 };
 
-// Initialize Firebase only once
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+let app: FirebaseApp;
 
-// Export single instances
+if (!getApps().length) {
+  app = initializeApp(firebaseConfig);
+} else {
+  app = getApps()[0] as FirebaseApp;
+}
+
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
 export { app };
