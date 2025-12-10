@@ -30,14 +30,15 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 // ✔ No web auth usage
 let authInstance: any;
 
-export const auth = (() => {
+export const getAuthInstance = () => {
   if (!authInstance) {
     authInstance = initializeAuth(app, {
       persistence: getReactNativePersistence(AsyncStorage),
     });
   }
   return authInstance;
-})();
+};
+
 
 export const db = getFirestore(app);
 export const storage = getStorage(app);

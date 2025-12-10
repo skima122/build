@@ -25,10 +25,11 @@ export default function Profile() {
 async function loadFirebase() {
   const firebase = await import("../../firebase/firebaseConfig");
   return {
-    auth: firebase.auth,
+    auth: firebase.getAuthInstance(),
     db: firebase.db,
   };
 }
+
 
 /* ---------- Main Screen ---------- */
 function ProfileScreen() {

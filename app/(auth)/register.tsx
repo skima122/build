@@ -77,13 +77,18 @@ function RegisterScreen() {
 
   try {
     // 👇 Lazy import — avoids early Firebase initialization
-    const { auth, db } = await import("../../firebase/firebaseConfig");
+  // 👇 Lazy import — avoids early Firebase initialization
+const firebase = await import("../../firebase/firebaseConfig");
 
-    const userCredential = await createUserWithEmailAndPassword(
-      auth,
-      email.trim(),
-      password
-    );
+const auth = firebase.getAuthInstance();
+const db = firebase.db;
+
+const userCredential = await createUserWithEmailAndPassword(
+  auth,
+  email.trim(),
+  password
+);
+
 
     const user = userCredential.user;
 

@@ -90,16 +90,19 @@ function ForgotPasswordScreen() {
 
   setLoading(true);
   try {
-    const { auth } = await import("../../firebase/firebaseConfig");
+    const { getAuthInstance } = await import("../../firebase/firebaseConfig");
+    const auth = getAuthInstance();
 
     await sendPasswordResetEmail(auth, email.trim());
     setSuccessMsg("Verification code sent to your email.");
     setStep(2);
   } catch (err: any) {
     setErrorMsg(err.message);
+  } finally {
+    setLoading(false);
   }
-  setLoading(false);
 };
+
 
 
  const verifyCode = async () => {
@@ -110,19 +113,21 @@ function ForgotPasswordScreen() {
 
   setLoading(true);
   try {
-    const { auth } = await import("../../firebase/firebaseConfig");
+    const { getAuthInstance } = await import("../../firebase/firebaseConfig");
+    const auth = getAuthInstance();
 
     await verifyPasswordResetCode(auth, code.trim());
     setSuccessMsg("Code verified! Enter your new password.");
     setStep(3);
   } catch (err: any) {
     setErrorMsg("Invalid or expired code.");
+  } finally {
+    setLoading(false);
   }
-  setLoading(false);
 };
 
 
-  const resetPasswordNow = async () => {
+ const resetPasswordNow = async () => {
   setErrorMsg("");
   setSuccessMsg("");
 
@@ -130,15 +135,18 @@ function ForgotPasswordScreen() {
 
   setLoading(true);
   try {
-    const { auth } = await import("../../firebase/firebaseConfig");
+    const { getAuthInstance } = await import("../../firebase/firebaseConfig");
+    const auth = getAuthInstance();
 
     await confirmPasswordReset(auth, code.trim(), newPass);
     Alert.alert("Success", "Your password has been reset.");
   } catch (err: any) {
     setErrorMsg(err.message);
+  } finally {
+    setLoading(false);
   }
-  setLoading(false);
 };
+;
 
 
   return (

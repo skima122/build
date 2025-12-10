@@ -37,7 +37,9 @@ const [user, setUser] = useState<any>(null);
 
 useEffect(() => {
   (async () => {
-    const { auth } = await import("../../firebase/firebaseConfig");
+    const firebase = await import("../../firebase/firebaseConfig");
+    const auth = firebase.getAuthInstance();
+
     setUser(auth.currentUser);
 
     if (!auth.currentUser) {
@@ -45,6 +47,7 @@ useEffect(() => {
     }
   })();
 }, []);
+
 
 
 
@@ -79,18 +82,20 @@ useEffect(() => {
     return;
   }
 
-  try {
-    // 👇 Lazy import — SAFE for EAS builds
-    const { auth, db, storage } = await import("../../firebase/firebaseConfig");
-    const { ref, uploadBytes, getDownloadURL } = await import("firebase/storage");
-    const { doc, setDoc, serverTimestamp } = await import("firebase/firestore");
+try {
+  // 👇 Lazy import — SAFE for EAS builds
+  const { getAuthInstance, db, storage } = await import("../../firebase/firebaseConfig");
+  const { ref, uploadBytes, getDownloadURL } = await import("firebase/storage");
+  const { doc, setDoc, serverTimestamp } = await import("firebase/firestore");
 
-    const user = auth.currentUser;
+  const auth = getAuthInstance();  // ✅ Correct way
+  const user = auth.currentUser;   // ✅ Works now
 
-    if (!user) {
-      Alert.alert("Error", "Not authenticated");
-      return router.replace("/(auth)/login");
-    }
+  if (!user) {
+    Alert.alert("Error", "Not authenticated");
+    return router.replace("/(auth)/login");
+  }
+
 
     let avatarUrl: string | null = null;
 

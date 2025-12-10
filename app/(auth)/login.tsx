@@ -51,13 +51,16 @@ function LoginScreen() {
     setErrorMsg("");
 
     try {
-      // 👇 LAZY LOAD FIREBASE (your preferred style)
-      const { auth, db } = await import("../../firebase/firebaseConfig");
+      const firebase = await import("../../firebase/firebaseConfig");
 
-      // 🔥 REQUIRED FIX FOR EXPO: Disable Recaptcha
-      if (auth.settings) {
-        auth.settings.appVerificationDisabledForTesting = true;
-      }
+const auth = firebase.getAuthInstance();
+const db = firebase.db;
+
+// 🔥 Disable Recaptcha for Expo
+if (auth.settings) {
+  auth.settings.appVerificationDisabledForTesting = true;
+}
+
 
       // 🔥 Email login (Recaptcha bypass works)
       await signInWithEmailAndPassword(auth, email.trim(), password.trim());
