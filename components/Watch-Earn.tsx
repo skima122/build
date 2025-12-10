@@ -8,10 +8,19 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from "react-native";
-import { auth, db } from "../firebase/firebaseConfig";
+
 import { claimWatchEarnReward } from "../firebase/user";
-import { doc, onSnapshot } from "firebase/firestore";
 import { showRewardedAd } from "../components/RewardedAd";
+
+// Lazy Firebase imports
+const getAuth = async () =>
+  (await import("firebase/auth")).getAuth();
+const getDB = async () =>
+  (await import("firebase/firestore")).getFirestore();
+const getDoc = async () =>
+  (await import("firebase/firestore")).doc;
+const onSnap = async () =>
+  (await import("firebase/firestore")).onSnapshot;
 
 type WatchEarnProps = {
   visible?: boolean;
@@ -22,9 +31,24 @@ export default function WatchEarn({
   visible = false,
   onClose,
 }: WatchEarnProps) {
-  const user = auth.currentUser ?? null;
-  const uid = user?.uid;
+  const [uid, setUid] = useState<string | null>(null);
 
+  /* -------------------------- AUTH LISTENER (lazy) -------------------------- */
+  useEffect(() => {
+    let unsubAuth: any;
+
+    (async () => {
+      const auth = await getAuth();
+
+      unsubAuth = auth.onAuthStateChanged((user) => {
+        setUid(user?.uid ?? null);
+      });
+    })();
+
+    return () => unsubAuth?.();
+  }, []);
+
+  /* --------------------------- LOCAL UI STATES ------------------------------ */
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [completed, setCompleted] = useState(false);
@@ -33,47 +57,44 @@ export default function WatchEarn({
     totalEarned: 0,
   });
 
-  /* ✅ Prevent setState after unmount */
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
+    return () => { mountedRef.current = false; };
   }, []);
 
-  /* ✅ Close if logged out */
+  /* ------------------------------ AUTO CLOSE IF LOGGED OUT ------------------------------ */
   useEffect(() => {
-    if (visible && !uid) {
-      onClose?.();
-    }
+    if (visible && !uid) onClose?.();
   }, [visible, uid, onClose]);
 
-  /* ✅ Live Firebase stats (guarded) */
+  /* ------------------------------ REALTIME LISTENER (lazy) ------------------------------ */
   useEffect(() => {
     if (!uid) return;
 
-    const ref = doc(db, "users", uid);
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
-        if (!snap.exists() || !mountedRef.current) return;
+    let unsub: any;
 
-        const data = snap.data() ?? {};
-        const watch = data.watchEarn ?? {};
+    (async () => {
+      const db = await getDB();
+      const docFn = await getDoc();
+      const onSnapshot = await onSnap();
 
+      const ref = docFn(db, "users", uid);
+      unsub = onSnapshot(ref, (snap: any) => {
+        if (!mountedRef.current || !snap.exists()) return;
+
+        const watch = snap.data()?.watchEarn ?? {};
         setStats({
           totalWatched: watch.totalWatched ?? 0,
           totalEarned: watch.totalEarned ?? 0,
         });
-      },
-      () => {}
-    );
+      });
+    })();
 
-    return () => unsub();
+    return () => unsub?.();
   }, [uid]);
 
-  /* ✅ REAL rewarded ad flow (anti-exploit protected) */
+  /* ---------------------------- WATCH & EARN FLOW --------------------------- */
   const handleWatch = useCallback(async () => {
     if (!uid || loading) return;
 
@@ -82,19 +103,14 @@ export default function WatchEarn({
       setCompleted(false);
       setMessage("");
 
-      // 🎥 Show rewarded ad
       await showRewardedAd();
-
       if (!mountedRef.current) return;
 
-      // ✅ Claim only AFTER ad completes
       const reward = await claimWatchEarnReward(uid);
-
       if (!mountedRef.current) return;
 
-      const amt = typeof reward === "number" ? reward : 0;
-      setMessage(`+${amt.toFixed(2)} VAD credited!`);
       setCompleted(true);
+      setMessage(`+${(reward ?? 0).toFixed(2)} VAD credited!`);
     } catch (e) {
       if (mountedRef.current) {
         setMessage("Ad not completed or failed.");
@@ -104,6 +120,7 @@ export default function WatchEarn({
     }
   }, [uid, loading]);
 
+  /* ------------------------------ CLOSE HANDLER ----------------------------- */
   const closeIfIdle = useCallback(() => {
     if (!loading) onClose?.();
   }, [loading, onClose]);
@@ -136,14 +153,12 @@ export default function WatchEarn({
               <Text style={styles.statLabel}>Ads Watched</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statValue}>
-                {totalEarned.toFixed(2)}
-              </Text>
+              <Text style={styles.statValue}>{totalEarned.toFixed(2)}</Text>
               <Text style={styles.statLabel}>VAD Earned</Text>
             </View>
           </View>
 
-          {!completed && (
+          {!completed ? (
             <Pressable
               onPress={handleWatch}
               disabled={loading}
@@ -160,9 +175,7 @@ export default function WatchEarn({
                 <Text style={styles.watchText}>Watch Ad</Text>
               )}
             </Pressable>
-          )}
-
-          {completed && (
+          ) : (
             <Pressable onPress={onClose} style={styles.doneBtn}>
               <Text style={styles.doneText}>Done</Text>
             </Pressable>
@@ -181,10 +194,7 @@ export default function WatchEarn({
   );
 }
 
-
-// styles stay unchanged
-
-
+// ------------------------------ STYLES ------------------------------
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -199,7 +209,7 @@ const styles = StyleSheet.create({
     padding: 26,
     borderWidth: 1,
     borderColor: "rgba(250,204,21,0.45)",
-   shadowColor: "#FACC15",
+    shadowColor: "#FACC15",
     shadowOpacity: 0.35,
     shadowRadius: 20,
     elevation: 14,

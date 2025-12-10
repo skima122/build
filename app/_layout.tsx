@@ -7,11 +7,26 @@ import {
 } from "@react-navigation/native";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { View, ActivityIndicator } from "react-native";
-import { auth, db } from "../firebase/firebaseConfig";
 import { useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
 
+/* --------------------------------------------------
+   Lazy Firebase Helpers (NO STATIC IMPORTS)
+-------------------------------------------------- */
+async function getAuthSafe() {
+  const { getAuth, onAuthStateChanged } = await import("firebase/auth");
+  const { app } = await import("../firebase/firebaseConfig");
+  return { auth: getAuth(app), onAuthStateChanged };
+}
+
+async function getFirestoreSafe() {
+  const { getFirestore, doc, getDoc } = await import("firebase/firestore");
+  const { app } = await import("../firebase/firebaseConfig");
+  return { db: getFirestore(app), doc, getDoc };
+}
+
+/* --------------------------------------------------
+   Root Layout
+-------------------------------------------------- */
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
@@ -19,30 +34,51 @@ export default function RootLayout() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [profileCompleted, setProfileCompleted] = useState(false);
 
+  /* --------------------------------------------------
+     AUTH LISTENER (Lazy Firebase)
+  -------------------------------------------------- */
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setIsAuthenticated(true);
+    let unsubscribe: any = null;
 
-        try {
-          const userRef = doc(db, "users", user.uid);
-          const userDoc = await getDoc(userRef);
-          setProfileCompleted(userDoc.exists() && !!userDoc.data()?.username);
-        } catch (err) {
-          console.warn("[Auth] failed to fetch user profile", err);
-          setProfileCompleted(false);
-        }
-      } else {
-        setIsAuthenticated(false);
-        setProfileCompleted(false);
+    (async () => {
+      try {
+        const { auth, onAuthStateChanged } = await getAuthSafe();
+        const { db, doc, getDoc } = await getFirestoreSafe();
+
+        unsubscribe = onAuthStateChanged(auth, async (user) => {
+          if (user) {
+            setIsAuthenticated(true);
+
+            try {
+              const userRef = doc(db, "users", user.uid);
+              const userDoc = await getDoc(userRef);
+
+              setProfileCompleted(
+                userDoc.exists() && !!userDoc.data()?.username
+              );
+            } catch (err) {
+              console.warn("[Auth] failed to fetch user profile", err);
+              setProfileCompleted(false);
+            }
+          } else {
+            setIsAuthenticated(false);
+            setProfileCompleted(false);
+          }
+
+          setLoading(false);
+        });
+      } catch (e) {
+        console.warn("🔥 Failed to init Firebase in layout:", e);
+        setLoading(false);
       }
+    })();
 
-      setLoading(false);
-    });
-
-    return unsubscribe;
+    return () => unsubscribe && unsubscribe();
   }, []);
 
+  /* --------------------------------------------------
+     Loading Screen
+  -------------------------------------------------- */
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
@@ -52,28 +88,30 @@ export default function RootLayout() {
     );
   }
 
+  /* --------------------------------------------------
+     Navigation Logic
+  -------------------------------------------------- */
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
 
-        {/* ✅ MAIN APP */}
+        {/* MAIN APP */}
         {isAuthenticated && profileCompleted && (
           <Stack.Screen name="(tabs)" />
         )}
 
-        {/* ✅ PROFILE SETUP */}
+        {/* PROFILE SETUP */}
         {isAuthenticated && !profileCompleted && (
           <Stack.Screen name="(auth)/profileSetup" />
         )}
 
-        {/* ✅ AUTH FLOW */}
+        {/* AUTH FLOW */}
         {!isAuthenticated && (
           <Stack.Screen name="(auth)" />
         )}
 
-        {/* OPTIONAL MODALS */}
+        {/* MODAL */}
         <Stack.Screen name="modal" options={{ presentation: "modal" }} />
-
       </Stack>
 
       <StatusBar style="auto" />

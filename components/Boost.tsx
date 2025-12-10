@@ -8,10 +8,18 @@ import {
   StyleSheet,
 } from "react-native";
 import { useInterstitialAd } from "react-native-google-mobile-ads";
-import { auth } from "../firebase/firebaseConfig";
 import { claimBoostReward } from "../firebase/user";
 import { useMining } from "../hooks/useMining";
 import { Timestamp } from "firebase/firestore";
+
+/* -------------------------------------------
+      ✅ LAZY AUTH IMPORT (fixes crash)
+-------------------------------------------- */
+async function lazyAuth() {
+  const { getAuth } = await import("firebase/auth");
+  const { app } = await import("../firebase/firebaseConfig");
+  return getAuth(app);
+}
 
 type BoostProps = {
   visible: boolean;
@@ -29,7 +37,6 @@ function timeLeft(ms: number) {
 export default function Boost({ visible, onClose }: BoostProps) {
   const { boost } = useMining();
 
-  // ✅ Freeze boost snapshot
   const boostSafe = useMemo(() => boost ?? null, [boost]);
 
   const [loading, setLoading] = useState(false);
@@ -37,34 +44,43 @@ export default function Boost({ visible, onClose }: BoostProps) {
   const [cooldownMs, setCooldownMs] = useState(0);
 
   const mountedRef = useRef(true);
-  const rewardPendingRef = useRef(false); // ✅ prevents multi-reward exploit
+  const rewardPendingRef = useRef(false);
 
-  /* ✅ Proper Ad Unit handling */
+  /* -------------------------------------------
+      AD UNITS
+  -------------------------------------------- */
   const adUnitId = __DEV__
     ? "ca-app-pub-3940256099942544/1033173712"
-    : "YOUR_REAL_PRODUCTION_AD_UNIT_ID";
+    : "YOUR_REAL_PROD_AD_UNIT_ID";
 
   const { isLoaded, isClosed, load, show } = useInterstitialAd(adUnitId, {
     requestNonPersonalizedAdsOnly: true,
   });
 
-  /* ✅ Safe unmount */
+  /* -------------------------------------------
+      SAFE UNMOUNT
+  -------------------------------------------- */
   useEffect(() => {
     mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
+    return () => { mountedRef.current = false; };
   }, []);
 
-  /* ✅ Auto close if logged out */
+  /* -------------------------------------------
+      AUTO CLOSE IF LOGGED OUT
+  -------------------------------------------- */
   useEffect(() => {
-    if (!auth.currentUser && visible) onClose?.();
+    (async () => {
+      const auth = await lazyAuth();
+      if (!auth.currentUser && visible) onClose?.();
+    })();
   }, [visible, onClose]);
 
   const usedToday = boostSafe?.usedToday ?? 0;
   const remaining = Math.max(0, 3 - usedToday);
 
-  /* ✅ Daily cooldown timer (bulletproof timestamp parsing) */
+  /* -------------------------------------------
+    COOLDOWN TIMER
+  -------------------------------------------- */
   useEffect(() => {
     if (!boostSafe?.lastReset) {
       setCooldownMs(0);
@@ -72,6 +88,7 @@ export default function Boost({ visible, onClose }: BoostProps) {
     }
 
     let lastMs = 0;
+
     try {
       if ((boostSafe.lastReset as any)?.toMillis) {
         lastMs = (boostSafe.lastReset as Timestamp).toMillis();
@@ -93,11 +110,12 @@ export default function Boost({ visible, onClose }: BoostProps) {
 
     update();
     const iv = setInterval(update, 30000);
-
     return () => clearInterval(iv);
   }, [boostSafe?.lastReset]);
 
-  /* ✅ Reward only after ad closes (ONE-TIME ONLY) */
+  /* -------------------------------------------
+      REWARD ONLY AFTER AD CLOSES
+  -------------------------------------------- */
   useEffect(() => {
     if (!isClosed || !rewardPendingRef.current) return;
 
@@ -105,10 +123,12 @@ export default function Boost({ visible, onClose }: BoostProps) {
 
     (async () => {
       try {
+        const auth = await lazyAuth();
         const user = auth.currentUser;
         if (!user || !mountedRef.current) return;
 
         const reward = await claimBoostReward(user.uid);
+
         if (!mountedRef.current) return;
 
         if (reward === 0) {
@@ -125,8 +145,12 @@ export default function Boost({ visible, onClose }: BoostProps) {
     })();
   }, [isClosed]);
 
-  /* ✅ Button handler */
+  /* -------------------------------------------
+      BUTTON HANDLER
+  -------------------------------------------- */
   const handleWatchAd = async () => {
+    const auth = await lazyAuth();
+
     if (!auth.currentUser) {
       setMessage("Login required.");
       return;
@@ -147,8 +171,9 @@ export default function Boost({ visible, onClose }: BoostProps) {
   };
 
   const progressLabel = useMemo(() => {
-    if (remaining === 0) return `Next reset in ${timeLeft(cooldownMs)}`;
-    return `${remaining} boosts remaining today`;
+    return remaining === 0
+      ? `Next reset in ${timeLeft(cooldownMs)}`
+      : `${remaining} boosts remaining today`;
   }, [remaining, cooldownMs]);
 
   if (!visible) return null;
@@ -209,6 +234,9 @@ export default function Boost({ visible, onClose }: BoostProps) {
   );
 }
 
+/* -------------------------------------------
+      STYLES (UNCHANGED)
+-------------------------------------------- */
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -300,11 +328,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "900",
     fontSize: 15,
-  },
-
-  loadingRow: {
-    flexDirection: "row",
-    alignItems: "center",
   },
 
   message: {

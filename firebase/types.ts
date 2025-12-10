@@ -1,4 +1,4 @@
-import { Timestamp } from 'firebase/firestore';
+import type { Timestamp, FieldValue } from "firebase/firestore";
 
 // USER PROFILE DATA
 export interface UserProfile {
@@ -6,7 +6,7 @@ export interface UserProfile {
   avatarUrl: string | null;
   referralCode: string;
   referredBy: string | null;
-  createdAt: Timestamp;
+  createdAt: Timestamp | FieldValue;
 }
 
 // MINING DATA

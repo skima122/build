@@ -1,38 +1,74 @@
 // firebase/user.ts
-import {
-  doc,
-  setDoc,
-  getDoc,
-  updateDoc,
-  serverTimestamp,
-  increment,
-  Timestamp,
-  runTransaction,
-} from "firebase/firestore";
-import { auth, db } from "./firebaseConfig";
-import { UserProfile, MiningData, ReferralData } from "./types";
-import { arrayUnion } from "firebase/firestore";
 
-// Generate random referral code
+import { UserProfile, MiningData, ReferralData } from "./types";
+
+/* -------------------------------------------------------------
+   LAZY FIREBASE HELPERS
+------------------------------------------------------------- */
+async function loadFirebase() {
+  const { getAuth } = await import("firebase/auth");
+  const {
+    getFirestore,
+    doc,
+    setDoc,
+    getDoc,
+    updateDoc,
+    serverTimestamp,
+    increment,
+    Timestamp,
+    runTransaction,
+    arrayUnion,
+  } = await import("firebase/firestore");
+
+  const { app } = await import("./firebaseConfig");
+
+  return {
+    auth: getAuth(app),
+    db: getFirestore(app),
+    doc,
+    setDoc,
+    getDoc,
+    updateDoc,
+    serverTimestamp,
+    increment,
+    Timestamp,
+    runTransaction,
+    arrayUnion,
+  };
+}
+
+/* -------------------------------------------------------------
+   Generate random referral code
+------------------------------------------------------------- */
 export const generateReferralCode = (uid: string) =>
   uid.slice(0, 6).toUpperCase();
 
-// ------------------------------
-// CREATE USER AFTER REGISTER
-// ------------------------------
+/* -------------------------------------------------------------
+   CREATE USER AFTER REGISTER
+------------------------------------------------------------- */
 export async function createUserInFirestore(referredBy: string | null = null) {
+  const {
+    auth,
+    db,
+    doc,
+    setDoc,
+    serverTimestamp,
+    Timestamp,
+  } = await loadFirebase();
+
   if (!auth.currentUser) return;
 
   const uid = auth.currentUser.uid;
   const userRef = doc(db, "users", uid);
 
-  const profile: UserProfile = {
-    username: "",
-    avatarUrl: null,
-    referralCode: generateReferralCode(uid),
-    referredBy,
-    createdAt: serverTimestamp() as Timestamp,
-  };
+const profile: UserProfile = {
+  username: "",
+  avatarUrl: null,
+  referralCode: generateReferralCode(uid),
+  referredBy,
+  createdAt: serverTimestamp(),
+};
+
 
   const mining: MiningData = {
     miningActive: false,
@@ -47,37 +83,40 @@ export async function createUserInFirestore(referredBy: string | null = null) {
   };
 
   await setDoc(userRef, {
-  profile,
-  mining,
-  referrals,
+    profile,
+    mining,
+    referrals,
 
-  boost: {
-    usedToday: 0,
-    lastReset: serverTimestamp(),
-    balance: 0,
-  },
+    boost: {
+      usedToday: 0,
+      lastReset: serverTimestamp(),
+      balance: 0,
+    },
 
-  dailyClaim: {
-    lastClaim: null,
-    streak: 0,
-    totalEarned: 0,
-  },
-});
-
+    dailyClaim: {
+      lastClaim: null,
+      streak: 0,
+      totalEarned: 0,
+    },
+  });
 }
 
-// ------------------------------
-// GET USER DATA
-// ------------------------------
+/* -------------------------------------------------------------
+   GET USER DATA
+------------------------------------------------------------- */
 export async function getUserData(uid: string) {
+  const { db, doc, getDoc } = await loadFirebase();
+
   const docSnap = await getDoc(doc(db, "users", uid));
   return docSnap.exists() ? docSnap.data() : null;
 }
 
-// ------------------------------
-// START MINING
-// ------------------------------
+/* -------------------------------------------------------------
+   START MINING
+------------------------------------------------------------- */
 export async function startMining(uid: string) {
+  const { db, doc, updateDoc, serverTimestamp } = await loadFirebase();
+
   const userRef = doc(db, "users", uid);
 
   await updateDoc(userRef, {
@@ -86,10 +125,12 @@ export async function startMining(uid: string) {
   });
 }
 
-// ------------------------------
-// STOP MINING
-// ------------------------------
+/* -------------------------------------------------------------
+   STOP MINING
+------------------------------------------------------------- */
 export async function stopMining(uid: string) {
+  const { db, doc, updateDoc } = await loadFirebase();
+
   const userRef = doc(db, "users", uid);
 
   await updateDoc(userRef, {
@@ -97,10 +138,19 @@ export async function stopMining(uid: string) {
   });
 }
 
-// ------------------------------
-// CLAIM MINING REWARDS
-// ------------------------------
+/* -------------------------------------------------------------
+   CLAIM MINING REWARD
+------------------------------------------------------------- */
 export async function claimMiningReward(uid: string) {
+  const {
+    db,
+    doc,
+    runTransaction,
+    increment,
+    Timestamp,
+    serverTimestamp,
+  } = await loadFirebase();
+
   const userRef = doc(db, "users", uid);
 
   const reward = await runTransaction(db, async (tx) => {
@@ -137,10 +187,13 @@ export async function claimMiningReward(uid: string) {
   return reward;
 }
 
-// ------------------------------
-// REGISTER REFERRAL
-// ------------------------------
+/* -------------------------------------------------------------
+   REGISTER REFERRAL
+------------------------------------------------------------- */
 export async function registerReferral(referrerCode: string, newUserUid: string) {
+  const { db, doc, getDoc, updateDoc, increment, arrayUnion } =
+    await loadFirebase();
+
   const allUsersSnap = await getDoc(doc(db, "referrals", referrerCode));
   if (!allUsersSnap.exists()) return;
 
@@ -153,10 +206,19 @@ export async function registerReferral(referrerCode: string, newUserUid: string)
   });
 }
 
-// ------------------------------
-// BOOST REWARD (WATCH ADS)
-// ------------------------------
+/* -------------------------------------------------------------
+   BOOST REWARD (WATCH ADS)
+------------------------------------------------------------- */
 export async function claimBoostReward(uid: string) {
+  const {
+    db,
+    doc,
+    runTransaction,
+    increment,
+    Timestamp,
+    serverTimestamp,
+  } = await loadFirebase();
+
   const userRef = doc(db, "users", uid);
 
   const reward = await runTransaction(db, async (tx) => {
@@ -177,7 +239,6 @@ export async function claimBoostReward(uid: string) {
 
     let resetApplied = false;
 
-    // ✅ Auto reset every 24h (persisted)
     if (!boost.lastReset || diff >= 24 * 3600 * 1000) {
       boost.usedToday = 0;
       boost.lastReset = now;
@@ -208,11 +269,19 @@ export async function claimBoostReward(uid: string) {
   return reward;
 }
 
-
-// ------------------------------
-// DAILY CLAIM (STREAK + INTERSTITIAL)
-// ------------------------------
+/* -------------------------------------------------------------
+   DAILY CLAIM (STREAK)
+------------------------------------------------------------- */
 export async function claimDailyReward(uid: string) {
+  const {
+    db,
+    doc,
+    runTransaction,
+    increment,
+    Timestamp,
+    serverTimestamp,
+  } = await loadFirebase();
+
   const userRef = doc(db, "users", uid);
 
   const reward = await runTransaction(db, async (tx) => {
@@ -232,20 +301,16 @@ export async function claimDailyReward(uid: string) {
 
     const DAY = 24 * 3600 * 1000;
 
-    // ❌ Already claimed within 24h
     if (lastClaim && diff < DAY) {
       return 0;
     }
 
-    // ✅ If missed over 48h → reset streak
     if (lastClaim && diff >= DAY * 2) {
       daily.streak = 0;
     }
 
-    // ✅ Increase streak
     daily.streak += 1;
 
-    // ✅ Reward table
     let REWARD = 0.1 * daily.streak;
     if (daily.streak === 7) REWARD = 2;
 
@@ -262,10 +327,12 @@ export async function claimDailyReward(uid: string) {
   return reward;
 }
 
-// ------------------------------
-// WATCH & EARN (REWARDED ADS)
-// ------------------------------
+/* -------------------------------------------------------------
+   WATCH & EARN (REWARDED ADS)
+------------------------------------------------------------- */
 export async function claimWatchEarnReward(uid: string) {
+  const { db, doc, runTransaction, increment } = await loadFirebase();
+
   const userRef = doc(db, "users", uid);
 
   const reward = await runTransaction(db, async (tx) => {
@@ -278,7 +345,7 @@ export async function claimWatchEarnReward(uid: string) {
       totalEarned: 0,
     };
 
-    const REWARD = 0.25; // ✅ you can change this later
+    const REWARD = 0.25;
 
     tx.update(userRef, {
       "mining.balance": increment(REWARD),
