@@ -10,11 +10,6 @@ import {
 
 import { useInterstitialAd } from "react-native-google-mobile-ads";
 import { useMining } from "../hooks/useMining";
-import { claimBoostReward } from "../firebase/user";
-
-/* ✅ NATIVE FIREBASE ONLY */
-import { getAuthInstance } from "../firebase/firebaseConfig";
-import { Timestamp } from "firebase/firestore";
 
 /* ----------------------------------------------------
    TYPES
@@ -32,9 +27,54 @@ function timeLeft(ms: number) {
   return `${h}h ${m}m`;
 }
 
+/* ----------------------------------------------------
+   LAZY HELPERS
+   (no static firebase imports here)
+---------------------------------------------------- */
+async function lazyGetAuthInstance() {
+  const mod = await import("../firebase/firebaseConfig");
+  return mod.getAuthInstance();
+}
+
+async function lazyClaimBoostReward(uid: string) {
+  const mod = await import("../firebase/user");
+  // export name in your file: claimBoostReward
+  return mod.claimBoostReward(uid);
+}
+
+async function parseLastResetToMs(value: any): Promise<number> {
+  // Try firebase Timestamp shape (has toMillis)
+  try {
+    if (value && typeof value.toMillis === "function") {
+      return value.toMillis();
+    }
+  } catch {
+    // ignore
+  }
+
+  // If it's numeric-like
+  const n = Number(value);
+  if (Number.isFinite(n)) return n;
+
+  return 0;
+}
+
+/* ----------------------------------------------------
+   COMPONENT
+---------------------------------------------------- */
 export default function Boost({ visible, onClose }: BoostProps) {
   const { boost } = useMining();
-  const boostSafe = useMemo(() => boost ?? null, [boost]);
+
+  // Defensive: snapshot boost object
+  const boostSafe = useMemo(() => {
+    if (!boost) return null;
+    // expected fields: usedToday, lastReset, balance
+    return {
+      usedToday: typeof boost.usedToday === "number" ? boost.usedToday : 0,
+      lastReset: boost.lastReset ?? null,
+      balance: typeof boost.balance === "number" ? boost.balance : 0,
+    };
+  }, [boost]);
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -42,85 +82,118 @@ export default function Boost({ visible, onClose }: BoostProps) {
 
   const mountedRef = useRef(true);
   const rewardPendingRef = useRef(false);
+  const loadingRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    loadingRef.current = loading;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [loading]);
 
   /* ----------------------------------------------------
-     📺 INTERSTITIAL AD SETUP
+     AD SETUP (useMemo so adUnitId is stable)
   ---------------------------------------------------- */
-  const adUnitId = __DEV__
-    ? "ca-app-pub-3940256099942544/1033173712"
-    : "YOUR_REAL_PROD_AD_UNIT_ID";
+  const adUnitId = useMemo(
+    () =>
+      __DEV__
+        ? "ca-app-pub-3940256099942544/1033173712"
+        : "YOUR_REAL_PROD_AD_UNIT_ID",
+    []
+  );
 
   const { isLoaded, isClosed, load, show } = useInterstitialAd(adUnitId, {
     requestNonPersonalizedAdsOnly: true,
   });
 
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
-
   /* ----------------------------------------------------
-     🔐 AUTO CLOSE WHEN LOGGED OUT
+     AUTO CLOSE WHEN LOGGED OUT (lazy auth)
   ---------------------------------------------------- */
   useEffect(() => {
-    const auth = getAuthInstance();
-    if (!auth.currentUser && visible) onClose?.();
+    let cancelled = false;
+    (async () => {
+      if (!visible) return;
+      try {
+        const auth = await lazyGetAuthInstance();
+        if (cancelled) return;
+        if (!auth?.currentUser) onClose?.();
+      } catch {
+        // ignore auth errors here
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [visible, onClose]);
 
-  const usedToday = boostSafe?.usedToday ?? 0;
-  const remaining = Math.max(0, 3 - usedToday);
-
   /* ----------------------------------------------------
-     ⏱ COOLDOWN TIMER (Firebase Timestamp)
+     COOLDOWN TIMER
   ---------------------------------------------------- */
   useEffect(() => {
-    if (!boostSafe?.lastReset) {
-      setCooldownMs(0);
-      return;
-    }
-
+    let iv: number | null = null;
     let lastMs = 0;
 
-    try {
-      if (boostSafe.lastReset instanceof Timestamp) {
-        lastMs = boostSafe.lastReset.toMillis();
-      } else {
-        const n = Number(boostSafe.lastReset);
-        lastMs = Number.isFinite(n) ? n : 0;
+    (async () => {
+      try {
+        lastMs = await parseLastResetToMs(boostSafe?.lastReset);
+      } catch {
+        lastMs = 0;
       }
-    } catch {
-      lastMs = 0;
-    }
 
-    const DAY = 86400000;
+      const DAY = 86400000;
 
-    const update = () => {
-      if (!mountedRef.current) return;
-      const remain = Math.max(0, DAY - (Date.now() - lastMs));
-      setCooldownMs(remain);
+      const update = () => {
+        if (!mountedRef.current) return;
+        const remain = Math.max(0, DAY - (Date.now() - lastMs));
+        setCooldownMs(remain);
+      };
+
+      update();
+      iv = global.setInterval(update, 30000);
+    })();
+
+    return () => {
+      if (iv) clearInterval(iv);
     };
-
-    update();
-    const iv = setInterval(update, 30000);
-    return () => clearInterval(iv);
-
   }, [boostSafe?.lastReset]);
 
   /* ----------------------------------------------------
-     🎁 GIVE REWARD AFTER AD CLOSES
+     PRELOAD AD WHEN MODAL OPENS
+  ---------------------------------------------------- */
+  useEffect(() => {
+    if (visible) {
+      // attempt to load ad (idempotent)
+      try {
+        load();
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [visible, load]);
+
+  /* ----------------------------------------------------
+     WHEN AD CLOSES -> GRANT REWARD (lazy claim)
   ---------------------------------------------------- */
   useEffect(() => {
     if (!isClosed || !rewardPendingRef.current) return;
 
+    // reset pending flag immediately to avoid duplicates
     rewardPendingRef.current = false;
 
     (async () => {
       try {
-        const auth = getAuthInstance();
-        const user = auth.currentUser;
-        if (!user || !mountedRef.current) return;
+        const auth = await lazyGetAuthInstance();
+        const user = auth?.currentUser;
+        if (!user || !mountedRef.current) {
+          if (mountedRef.current) {
+            setMessage("Not authenticated.");
+            setLoading(false);
+          }
+          return;
+        }
 
-        const reward = await claimBoostReward(user.uid);
+        const reward = await lazyClaimBoostReward(user.uid);
 
         if (!mountedRef.current) return;
 
@@ -139,33 +212,73 @@ export default function Boost({ visible, onClose }: BoostProps) {
   }, [isClosed]);
 
   /* ----------------------------------------------------
-     ▶️ BUTTON ACTION — WATCH AD
+     HANDLE WATCH AD BUTTON
   ---------------------------------------------------- */
+  const usedToday = boostSafe?.usedToday ?? 0;
+  const remaining = Math.max(0, 3 - usedToday);
+
   const handleWatchAd = async () => {
-    const auth = getAuthInstance();
+    // Prevent double invocation
+    if (loadingRef.current) return;
 
-    if (!auth.currentUser) {
-      setMessage("Login required.");
-      return;
-    }
-
-    if (remaining <= 0 || loading) return;
-
-    setLoading(true);
     setMessage("");
+    setLoading(true);
+    loadingRef.current = true;
     rewardPendingRef.current = true;
 
-    if (!isLoaded) {
-      load();
-      return;
-    }
+    try {
+      const auth = await lazyGetAuthInstance();
+      const user = auth?.currentUser;
+      if (!user) {
+        setMessage("Login required.");
+        setLoading(false);
+        loadingRef.current = false;
+        rewardPendingRef.current = false;
+        return;
+      }
 
-    show();
+      if (remaining <= 0) {
+        setMessage("No boosts left today.");
+        setLoading(false);
+        loadingRef.current = false;
+        rewardPendingRef.current = false;
+        return;
+      }
+
+      // If not loaded, request load and wait for load; don't call show() immediately
+      if (!isLoaded) {
+        // attempt to load and wait a short time
+        try {
+          load();
+          // give it a small grace period to load before returning control
+          // user will tap again when ready (keeps UI responsive)
+        } catch {
+          // ignore load errors
+        }
+        setLoading(false);
+        loadingRef.current = false;
+        return;
+      }
+
+      // show ad (native)
+      try {
+        show();
+      } catch (err) {
+        // show failed: clear pending and inform user
+        rewardPendingRef.current = false;
+        setMessage("Failed to show ad.");
+        setLoading(false);
+        loadingRef.current = false;
+      }
+    } catch (err) {
+      console.error("handleWatchAd error:", err);
+      rewardPendingRef.current = false;
+      setMessage("Ad failed to start.");
+      setLoading(false);
+      loadingRef.current = false;
+    }
   };
 
-  /* ----------------------------------------------------
-     UI LABEL
-  ---------------------------------------------------- */
   const progressLabel = useMemo(() => {
     return remaining === 0
       ? `Next reset in ${timeLeft(cooldownMs)}`
@@ -231,7 +344,7 @@ export default function Boost({ visible, onClose }: BoostProps) {
 }
 
 /* -------------------------------------------
-      STYLES (UNCHANGED)
+      STYLES (kept as you provided)
 -------------------------------------------- */
 const styles = StyleSheet.create({
   overlay: {

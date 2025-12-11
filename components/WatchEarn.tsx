@@ -1,5 +1,9 @@
-// app/components/Watch-earn.tsx
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+} from "react";
 import {
   View,
   Text,
@@ -9,40 +13,54 @@ import {
   ActivityIndicator,
 } from "react-native";
 
-import { claimWatchEarnReward } from "../firebase/user";
-import { showRewardedAd } from "./RewardedAd";
-
-// -----------------------------
-// LAZY FIREBASE (Expo Firebase)
-// -----------------------------
-const getAuth = async () =>
+/* -------------------------------
+   🔥 LAZY IMPORT HELPERS
+--------------------------------*/
+const lazyFirebaseAuth = async () =>
   (await import("firebase/auth")).getAuth();
 
-const getFirestore = async () =>
+const lazyFirebaseFirestore = async () =>
+  await import("firebase/firestore");
+
+const lazyGetFirestore = async () =>
   (await import("firebase/firestore")).getFirestore();
 
-const { doc, onSnapshot } = await import("firebase/firestore");
+const lazyShowRewardedAd = async () =>
+  (await import("./RewardedAd")).showRewardedAd;
 
-type WatchEarnProps = {
+const lazyClaimReward = async () =>
+  (await import("../firebase/user")).claimWatchEarnReward;
+
+/* -------------------------------
+   🔥 COMPONENT
+--------------------------------*/
+type Props = {
   visible?: boolean;
   onClose?: () => void;
 };
 
-export default function WatchEarn({
-  visible = false,
-  onClose,
-}: WatchEarnProps) {
+export default function WatchEarn({ visible = false, onClose }: Props) {
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  /* -------------------------------
+     AUTH STATE LISTENER
+  --------------------------------*/
   const [uid, setUid] = useState<string | null>(null);
 
-  // -----------------------------
-  // 🔥 AUTH LISTENER (Expo Firebase)
-  // -----------------------------
   useEffect(() => {
     let unsub: any;
 
     (async () => {
-      const auth = await getAuth();
+      const auth = await lazyFirebaseAuth();
       unsub = auth.onAuthStateChanged((user) => {
+        if (!mounted.current) return;
         setUid(user?.uid ?? null);
       });
     })();
@@ -50,52 +68,48 @@ export default function WatchEarn({
     return () => unsub?.();
   }, []);
 
-  // -----------------------------
-  // UI
-  // -----------------------------
+  /* -------------------------------
+     STATE
+  --------------------------------*/
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
   const [completed, setCompleted] = useState(false);
+  const [message, setMessage] = useState("");
+
   const [stats, setStats] = useState({
     totalWatched: 0,
     totalEarned: 0,
   });
 
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-
-  // -----------------------------
-  // Auto-close when logged out
-  // -----------------------------
+  /* -------------------------------
+     CLOSE IF LOGGED OUT
+  --------------------------------*/
   useEffect(() => {
     if (visible && !uid) onClose?.();
   }, [visible, uid]);
 
-  // -----------------------------
-  // 🔥 REALTIME FIRESTORE LISTENER
-  // -----------------------------
+  /* -------------------------------
+     REALTIME FIRESTORE
+  --------------------------------*/
   useEffect(() => {
     if (!uid) return;
 
     let unsub: any;
 
     (async () => {
-      const db = await getFirestore();
+      const db = await lazyGetFirestore();
+      const firestore = await lazyFirebaseFirestore();
+      const { doc, onSnapshot } = firestore;
+
       const ref = doc(db, "users", uid);
 
       unsub = onSnapshot(ref, (snap) => {
-        if (!mountedRef.current || !snap.exists()) return;
+        if (!mounted.current || !snap.exists()) return;
 
-        const data = snap.data()?.watchEarn ?? {};
+        const d = snap.data()?.watchEarn ?? {};
 
         setStats({
-          totalWatched: data.totalWatched ?? 0,
-          totalEarned: data.totalEarned ?? 0,
+          totalWatched: d.totalWatched ?? 0,
+          totalEarned: d.totalEarned ?? 0,
         });
       });
     })();
@@ -103,9 +117,9 @@ export default function WatchEarn({
     return () => unsub?.();
   }, [uid]);
 
-  // -----------------------------
-  // WATCH FLOW
-  // -----------------------------
+  /* -------------------------------
+     WATCH AD FLOW
+  --------------------------------*/
   const handleWatch = useCallback(async () => {
     if (!uid || loading) return;
 
@@ -114,20 +128,23 @@ export default function WatchEarn({
       setCompleted(false);
       setMessage("");
 
-      await showRewardedAd();
-      if (!mountedRef.current) return;
+      const showRewardedAd = await lazyShowRewardedAd();
+      const claimReward = await lazyClaimReward();
 
-      const reward = await claimWatchEarnReward(uid);
-      if (!mountedRef.current) return;
+      await showRewardedAd();
+      if (!mounted.current) return;
+
+      const reward = await claimReward(uid);
+      if (!mounted.current) return;
 
       setCompleted(true);
       setMessage(`+${(reward ?? 0).toFixed(2)} VAD credited!`);
-    } catch (e) {
-      if (mountedRef.current) {
+    } catch (err) {
+      if (mounted.current) {
         setMessage("Ad not completed or failed.");
       }
     } finally {
-      if (mountedRef.current) setLoading(false);
+      if (mounted.current) setLoading(false);
     }
   }, [uid, loading]);
 
@@ -135,10 +152,9 @@ export default function WatchEarn({
     if (!loading) onClose?.();
   }, [loading, onClose]);
 
-  const totalEarned = stats.totalEarned ?? 0;
-  const totalWatched = stats.totalWatched ?? 0;
-
   if (!visible) return null;
+
+  const { totalWatched, totalEarned } = stats;
 
   return (
     <Modal
@@ -150,7 +166,9 @@ export default function WatchEarn({
       <View style={styles.overlay}>
         <View style={styles.card}>
           <Text style={styles.title}>🎥 Watch & Earn</Text>
-          <Text style={styles.sub}>Optional rewarded ads for instant VAD</Text>
+          <Text style={styles.sub}>
+            Optional rewarded ads for instant VAD
+          </Text>
 
           <View style={styles.rewardBox}>
             <Text style={styles.reward}>+0.25 VAD</Text>
@@ -163,7 +181,9 @@ export default function WatchEarn({
               <Text style={styles.statLabel}>Ads Watched</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statValue}>{totalEarned.toFixed(2)}</Text>
+              <Text style={styles.statValue}>
+                {totalEarned.toFixed(2)}
+              </Text>
               <Text style={styles.statLabel}>VAD Earned</Text>
             </View>
           </View>
@@ -172,12 +192,17 @@ export default function WatchEarn({
             <Pressable
               onPress={handleWatch}
               disabled={loading}
-              style={[styles.watchBtn, loading && { opacity: 0.6 }]}
+              style={[
+                styles.watchBtn,
+                loading && { opacity: 0.6 },
+              ]}
             >
               {loading ? (
                 <View style={{ flexDirection: "row" }}>
                   <ActivityIndicator />
-                  <Text style={[styles.watchText, { marginLeft: 10 }]}>
+                  <Text
+                    style={[styles.watchText, { marginLeft: 10 }]}
+                  >
                     Loading ad...
                   </Text>
                 </View>
@@ -191,7 +216,9 @@ export default function WatchEarn({
             </Pressable>
           )}
 
-          {message ? <Text style={styles.message}>{message}</Text> : null}
+          {message ? (
+            <Text style={styles.message}>{message}</Text>
+          ) : null}
 
           {!loading && !completed && (
             <Pressable onPress={onClose} style={styles.skipBtn}>
@@ -204,9 +231,9 @@ export default function WatchEarn({
   );
 }
 
-/* ---------------------------------------------------
-   STYLES (unchanged)
----------------------------------------------------- */
+/* -------------------------------
+   STYLES
+--------------------------------*/
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
