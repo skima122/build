@@ -23,7 +23,7 @@ import { getDatabase, ref as dbRef, onValue } from "firebase/database";
 
 import DailyClaim from "../../components/DailyClaim";
 import Boost from "../../components/Boost";
-import WatchEarn from "../../components/Watch-Earn";
+import WatchEarn from "../../components/WatchEarn";
 import AdBanner from "../../components/AdBanner";
 
 /* ============================================================

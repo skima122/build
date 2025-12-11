@@ -10,7 +10,7 @@ import {
 } from "react-native";
 
 import { claimWatchEarnReward } from "../firebase/user";
-import { showRewardedAd } from "../components/RewardedAd";
+import { showRewardedAd } from "./RewardedAd";
 
 // -----------------------------
 // LAZY FIREBASE (Expo Firebase)
